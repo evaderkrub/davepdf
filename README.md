@@ -1,6 +1,8 @@
 # davepdf
 
-davepdf is a portable native PDF viewer for Windows x64, built in C++20 with SDL3 for the window and input, Dear ImGui (docking branch) for the interface and PDFium for rendering. It opens a PDF, shows the pages as a continuously scrolled stack with thumbnails, outline, search, links and document properties, and remembers its theme, scale, layout and recent files.
+A portable native PDF viewer for Windows x64, built in C++20 with SDL3 for the window and input, Dear ImGui (docking branch) for the interface and PDFium for rendering. It opens a PDF, shows the pages as a continuously scrolled stack with thumbnails, outline, search, links and document properties, and remembers its theme, scale, layout and recent files. One executable, one DLL and an assets folder: copy it anywhere and run it.
+
+![davepdf showing its built-in sample document](docs/screenshot.png)
 
 ## Run
 
@@ -88,4 +90,6 @@ The drawing code reads the `Session` and never owns state; it calls back into `p
 
 PDFium is used as a prebuilt DLL because building it from source needs Chromium's depot_tools; it is the only file beside the executable and the assets. Selection is limited to one page at a time. Annotations, form filling, printing and a two-page spread are not implemented yet. Very large zoom levels are capped at 8192 pixel textures per page. Only Windows x64 is built; the code has no other Windows-only dependency than the file dialog, icon and settings folder in `host_windows.cpp`.
 
-Third-party licenses: `assets/licenses` (SDL, Dear ImGui, ImGui Test Engine, Open Sans, Material Icons, PDFium and its bundled libraries).
+## License
+
+davepdf is released under the [MIT License](LICENSE). Third-party components keep their own licenses, collected in `assets/licenses`: SDL (zlib), Dear ImGui and ImGui Test Engine (MIT), Open Sans (OFL 1.1), Material Icons (Apache 2.0), and PDFium with its bundled libraries (BSD-3-Clause and others, see `PDFium.txt`). The theme and font setup come from the FreeWili fwcom project.

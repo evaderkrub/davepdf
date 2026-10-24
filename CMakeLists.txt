@@ -86,9 +86,10 @@ add_custom_command(TARGET davepdf POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:davepdf>/assets/icons/IconsMaterialDesign.h" "$<TARGET_FILE_DIR:davepdf>/assets/icons/davepdf.png"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:pdfium>" "$<TARGET_FILE_DIR:davepdf>/pdfium.dll"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${pdfium_SOURCE_DIR}/LICENSE" "$<TARGET_FILE_DIR:davepdf>/assets/licenses/PDFium.txt"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/README.md" "$<TARGET_FILE_DIR:davepdf>/README.md")
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/README.md" "$<TARGET_FILE_DIR:davepdf>/README.md"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/LICENSE" "$<TARGET_FILE_DIR:davepdf>/LICENSE")
 install(TARGETS davepdf RUNTIME DESTINATION .)
-install(FILES "$<TARGET_FILE:pdfium>" README.md DESTINATION .)
+install(FILES "$<TARGET_FILE:pdfium>" README.md LICENSE DESTINATION .)
 install(DIRECTORY assets DESTINATION . PATTERN "*.h" EXCLUDE PATTERN "davepdf.png" EXCLUDE)
 install(FILES "${pdfium_SOURCE_DIR}/LICENSE" DESTINATION assets/licenses RENAME PDFium.txt)
 
