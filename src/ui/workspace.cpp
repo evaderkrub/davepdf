@@ -339,6 +339,8 @@ void welcome(Session& s) {
             ImGui::PopFont();
             ImGui::PopStyleColor();
             ImGui::Separator();
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 150 * us);
+            if (ImGui::SmallButton("Show all in Recent panel")) { s.show_sidebar = true; s.sidebar_focus_tab = 2; s.sidebar_focus_frames = 3; }
             for (size_t i = 0; i < s.recent.size() && i < 5; ++i) {
                 const std::string name = file_name_of(s.recent[i]);
                 const std::string id = "###welcome_recent" + std::to_string(i);
@@ -403,11 +405,23 @@ void dock_layout(Session& s, ImGuiID dock, const ImGuiViewport* viewport) {
         ImGui::DockBuilderDockWindow("Document", center);
         ImGui::DockBuilderDockWindow("Pages", left);
         ImGui::DockBuilderDockWindow("Outline", left);
+        ImGui::DockBuilderDockWindow("Recent", left);
         ImGui::DockBuilderDockWindow("Properties", right);
         ImGui::DockBuilderDockWindow("Search results", right);
         ImGui::DockBuilderFinish(dock);
         s.sidebar_focus_tab = s.sidebar_tab;
         s.sidebar_focus_frames = 3;
+    } else {
+        // A layout saved by an older build knows nothing about panels added
+        // since, which would otherwise appear floating. Each one is docked
+        // next to its natural sibling the first time it is ever seen.
+        const auto adopt = [&](const char* window, const char* sibling) {
+            if (!s.adopt_new_panels && ImGui::FindWindowSettingsByID(ImHashStr(window))) return;
+            if (ImGuiWindowSettings* known = ImGui::FindWindowSettingsByID(ImHashStr(sibling)); known && known->DockId) ImGui::DockBuilderDockWindow(window, known->DockId);
+        };
+        adopt("Recent", "Pages");
+        adopt("Search results", "Properties");
+        s.adopt_new_panels = false;
     }
     s.dock_initialized = true;
 }
@@ -417,7 +431,7 @@ void set_fonts(Fonts f) { loaded_fonts = f; }
 const Fonts& fonts() { return loaded_fonts; }
 float ui_scale(const Session& s) { return s.scale * s.dpi; }
 
-bool icon_button(const char* icon, const char* label, bool enabled, bool active) {
+bool icon_button(const char* icon, const char* label, bool enabled, bool active, const char* tooltip) {
     const auto& p = fwPaletteCurrent();
     ImGui::BeginDisabled(!enabled);
     // Flat buttons: no fill at rest, a soft surface on hover, the accent as a
@@ -431,7 +445,7 @@ bool icon_button(const char* icon, const char* label, bool enabled, bool active)
     const bool pressed = ImGui::Button(id.c_str(), ImVec2(side, side));
     if (active) ImGui::PopStyleColor();
     ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", label);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", tooltip ? tooltip : label);
     ImGui::EndDisabled();
     return pressed;
 }
@@ -503,6 +517,7 @@ void draw_workspace(Session& s) {
     if (s.show_sidebar) {
         draw_pages_panel(s);
         draw_outline_panel(s);
+        draw_recent_panel(s);
     }
     if (s.sidebar_focus_frames > 0) { --s.sidebar_focus_frames; s.sidebar_tab = s.sidebar_focus_tab; }
     if (s.show_properties) draw_properties_panel(s);

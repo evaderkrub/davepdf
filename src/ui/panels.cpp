@@ -1,5 +1,6 @@
 #include "ui/workspace.h"
 #include "ui/fwTheme.h"
+#include "app/recent_tree.h"
 #include "platform/desktop.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -230,6 +231,100 @@ void draw_search_results_panel(Session& s) {
         dl->AddText(ImVec2(x0, y0 + ImGui::GetTextLineHeight() + 2 * us), p.textFaint, where);
     }
     ImGui::End();
+}
+
+namespace {
+struct RecentActions {
+    std::vector<int> remove;   // recent indices to drop
+    std::string open, reveal;
+};
+
+void collect_files(const RecentNode& node, std::vector<int>& out) {
+    if (node.is_file) { out.push_back(node.recent_index); return; }
+    for (const auto& child : node.children) collect_files(child, out);
+}
+
+void draw_recent_nodes(Session& s, const RecentNode& node, RecentActions& actions, float us) {
+    const auto& p = fwPaletteCurrent();
+    for (const auto& child : node.children) {
+        if (!child.is_file) {
+            ImGui::PushID(child.path.c_str());
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4 * us, 3 * us));
+            const std::string label = std::string(ICON_MD_FOLDER) + "  " + child.label;
+            const bool open = ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding);
+            ImGui::PopStyleVar();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s", child.path.c_str());
+            if (ImGui::BeginPopupContextItem("folder")) {
+                if (ImGui::MenuItem("Remove this folder's entries")) collect_files(child, actions.remove);
+                ImGui::EndPopup();
+            }
+            if (open) { draw_recent_nodes(s, child, actions, us); ImGui::TreePop(); }
+            ImGui::PopID();
+            continue;
+        }
+        const bool exists = platform::recent_exists(child.path);
+        const bool current = s.has_document && s.info.path == child.path;
+        const std::string row_id = "###recentfile" + std::to_string(child.recent_index);
+        const float row_h = ImGui::GetFrameHeight();
+        const ImVec2 top = ImGui::GetCursorScreenPos();
+        // Measured from the window's right edge so nested rows line their buttons up.
+        const float right_edge = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+        const float row_w = std::max(40.0f, right_edge - top.x - row_h - 4 * us);
+        if (ImGui::Selectable(row_id.c_str(), current, ImGuiSelectableFlags_AllowOverlap, ImVec2(row_w, row_h))) actions.open = child.path;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s%s", child.path.c_str(), exists ? "" : "\n(not found)");
+        if (ImGui::BeginPopupContextItem("file")) {
+            if (ImGui::MenuItem("Open", nullptr, false, exists)) actions.open = child.path;
+            if (ImGui::MenuItem("Show in folder", nullptr, false, exists)) actions.reveal = child.path;
+            ImGui::Separator();
+            if (ImGui::MenuItem("Remove from list")) actions.remove.push_back(child.recent_index);
+            ImGui::EndPopup();
+        }
+        // Icon and name over the selectable; missing files are dimmed.
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImU32 color = !exists ? p.textFaint : current ? p.accent : p.text;
+        const float x = top.x + ImGui::GetTreeNodeToLabelSpacing() * 0.5f;
+        const float y = top.y + (row_h - ImGui::GetTextLineHeight()) / 2;
+        dl->AddText(ImVec2(x, y), exists ? p.textMuted : p.warning, exists ? ICON_MD_DESCRIPTION : ICON_MD_ERROR_OUTLINE);
+        const ImVec4 clip(top.x, top.y, top.x + row_w, top.y + row_h);
+        dl->AddText(nullptr, 0, ImVec2(x + ImGui::CalcTextSize(ICON_MD_DESCRIPTION).x + 6 * us, y), color, child.label.c_str(), nullptr, 0, &clip);
+        // The remove button sits at the row's right edge, always visible but faint.
+        ImGui::SameLine();
+        ImGui::SetCursorScreenPos(ImVec2(right_edge - row_h, top.y));
+        ImGui::PushStyleColor(ImGuiCol_Text, p.textFaint);
+        const std::string remove_id = "remove" + std::to_string(child.recent_index);
+        if (icon_button(ICON_MD_CLOSE, remove_id.c_str(), true, false, "Remove from list")) actions.remove.push_back(child.recent_index);
+        ImGui::PopStyleColor();
+    }
+}
+} // namespace
+
+void draw_recent_panel(Session& s) {
+    const float us = ui_scale(s);
+    const auto& p = fwPaletteCurrent();
+    ImGui::SetNextWindowSizeConstraints(ImVec2(140 * us, 100 * us), ImVec2(FLT_MAX, FLT_MAX));
+    if (s.sidebar_focus_frames > 0 && s.sidebar_focus_tab == 2) ImGui::SetNextWindowFocus();
+    if (!ImGui::Begin("Recent", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysVerticalScrollbar)) { ImGui::End(); return; }
+    s.sidebar_tab = 2;
+    if (s.recent.empty()) { empty_state(ICON_MD_HISTORY, "Documents you open are listed here, grouped by folder."); ImGui::End(); return; }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), "%zu %s", s.recent.size(), s.recent.size() == 1 ? "document" : "documents");
+    const float clear_w = ImGui::CalcTextSize("Clear list").x + ImGui::GetStyle().FramePadding.x * 2;
+    ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - clear_w));
+    if (ImGui::Button("Clear list")) s.confirm_clear_recent = true;
+    ImGui::Separator();
+    // Rebuilt every frame: the list holds at most ten entries.
+    const RecentNode tree = build_recent_tree(s.recent);
+    RecentActions actions;
+    draw_recent_nodes(s, tree, actions, us);
+    ImGui::End();
+    if (!actions.remove.empty()) {
+        std::sort(actions.remove.begin(), actions.remove.end());
+        for (auto it = actions.remove.rbegin(); it != actions.remove.rend(); ++it)
+            if (*it >= 0 && *it < static_cast<int>(s.recent.size())) s.recent.erase(s.recent.begin() + *it);
+        s.status = actions.remove.size() == 1 ? "Removed from the recent list" : "Removed " + std::to_string(actions.remove.size()) + " entries from the recent list";
+    }
+    if (!actions.open.empty()) platform::request_action(s, Action::OpenPath, actions.open);
+    if (!actions.reveal.empty()) platform::reveal_recent(s, actions.reveal);
 }
 
 void draw_properties_panel(Session& s) {

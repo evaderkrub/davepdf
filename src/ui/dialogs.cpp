@@ -145,6 +145,19 @@ void draw_dialogs(Session& s) {
         ImGui::EndPopup();
     }
 
+    // Clearing the recent list cannot be undone, so it asks once.
+    if (s.confirm_clear_recent) ImGui::OpenPopup("Clear recent list");
+    center_next_window();
+    if (ImGui::BeginPopupModal("Clear recent list", &s.confirm_clear_recent, modal_flags)) {
+        ImGui::Text("Forget all %zu recent documents?", s.recent.size());
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), "The files themselves are not touched.");
+        ImGui::Spacing();
+        if (ImGui::Button("Clear", ImVec2(100 * us, 0))) { s.recent.clear(); s.status = "Recent list cleared"; s.confirm_clear_recent = false; ImGui::CloseCurrentPopup(); }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(100 * us, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) { s.confirm_clear_recent = false; ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+
     // Errors.
     if (!s.error.empty()) ImGui::OpenPopup("davepdf");
     center_next_window();

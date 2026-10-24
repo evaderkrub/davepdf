@@ -332,6 +332,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         const ImVec2 from(origin_x + page_rect.x + (title.x + 0.01f) * page_rect.w, origin_y + page_rect.y + (title.y + title.h / 2) * page_rect.h);
         const ImVec2 to(origin_x + page_rect.x + (title.x + title.w - 0.01f) * page_rect.w, from.y);
         const float scroll_before = s.scroll_y;
+        wait_for_renders(ctx, s);
         ctx->MouseMoveToPos(from);
         ctx->Yield(2);
         ctx->MouseDown(ImGuiMouseButton_Left);
@@ -469,6 +470,31 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         ctx->MenuClick("File/Open recent/###recent0");
         ctx->Yield(4);
         IM_CHECK(s.has_document);
+        // The Recent panel groups by folder, removes single entries and clears the list.
+        const auto sub = dir / "sub";
+        std::filesystem::create_directories(sub);
+        const auto second = sub / "second.pdf";
+        { std::ofstream f(second, std::ios::binary); f << make_sample_pdf(); }
+        platform::request_action(s, Action::OpenPath, u8(second));
+        ctx->Yield(4);
+        IM_CHECK(s.recent.size() == 2 && s.recent[0] == u8(second));
+        ctx->WindowFocus("//Recent");
+        ctx->Yield(2);
+        ctx->SetRef("Recent");
+        IM_CHECK(ctx->ItemExists("**/###recentfile0") && ctx->ItemExists("**/###recentfile1"));
+        ctx->ItemClick("**/###recentfile1");  // the older entry: opens it
+        ctx->Yield(4);
+        IM_CHECK(s.info.file_name == "sample copy.pdf");
+        IM_CHECK(s.recent[0] == u8(good));
+        ctx->ItemClick("**/remove1");  // drop second.pdf
+        ctx->Yield(3);
+        IM_CHECK(s.recent.size() == 1 && s.recent[0] == u8(good));
+        ctx->ItemClick("Clear list");
+        ctx->Yield(2);
+        ctx->SetRef("Clear recent list");
+        ctx->ItemClick("Clear");
+        ctx->Yield(2);
+        IM_CHECK(s.recent.empty());
         platform::close_document(s);
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);

@@ -84,5 +84,12 @@ bool open_external(const std::string& uri, std::string& error) {
     if (status <= 32) { error = "Windows could not open the link."; return false; }
     return true;
 }
+
+bool reveal_in_folder(const std::string& utf8_path, std::string& error) {
+    const std::wstring arguments = L"/select,\"" + widen(utf8_path) + L"\"";
+    const auto status = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"explorer.exe", arguments.c_str(), nullptr, SW_SHOWNORMAL));
+    if (status <= 32) { error = "Windows could not open the folder."; return false; }
+    return true;
+}
 } // namespace host
 } // namespace davepdf::platform

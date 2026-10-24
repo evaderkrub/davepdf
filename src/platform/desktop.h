@@ -31,11 +31,17 @@ void copy_page_text(Session& session, int page);
 // Text selection: character under a normalised page point (-1 if none),
 // updating the selection's boxes, and copying it (or, with no selection,
 // the whole current page) to the clipboard.
-int text_index_at(Session& session, int page, float nx, float ny);
+// `wait` blocks for the engine (a mouse press must not be lost to a render in
+// progress); hover queries pass false and simply ask again next frame.
+int text_index_at(Session& session, int page, float nx, float ny, bool wait = false);
 void set_selection(Session& session, int page, int anchor, int focus);
 void copy_selection_or_page(Session& session);
 void set_invert_pages(Session& session, bool invert);
 void go_to_page(Session& session, int page);
 void close_document(Session& session);
+// Recent panel helpers: a cached existence check (re-tested every few
+// seconds) and "show in folder".
+bool recent_exists(const std::string& utf8_path);
+void reveal_recent(Session& session, const std::string& utf8_path);
 
 } // namespace davepdf::platform

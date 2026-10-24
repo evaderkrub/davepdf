@@ -1,4 +1,5 @@
 // Console tests for the window-free application logic.
+#include "app/recent_tree.h"
 #include "app/sample_pdf.h"
 #include "app/settings.h"
 #include "app/viewer.h"
@@ -125,6 +126,9 @@ static void test_settings() {
     const Settings back = parse_settings(serialize_settings(s));
     CHECK(back.theme == 2);
     CHECK(back.invert_pages && back.fit == 2);
+    s.layout_version = 2;
+    CHECK(parse_settings(serialize_settings(s)).layout_version == 2);
+    CHECK(parse_settings("theme=0\n").layout_version == 0);  // older saves have no version
     CHECK(parse_settings("fit=7\n").fit == 1);
     CHECK(near(back.scale, 1.25f));
     CHECK(!back.show_sidebar && back.sidebar_tab == 1 && back.show_properties);
@@ -140,6 +144,39 @@ static void test_settings() {
     CHECK(recent.size() == kMaxRecentFiles - 1 && recent.front() == "f14");
     add_recent(recent, "");
     CHECK(recent.size() == kMaxRecentFiles - 1);
+}
+
+static void test_recent_tree() {
+    const std::vector<std::string> recent = {
+        "C:\\Users\\dave\\Documents\\b.pdf",
+        "C:\\Users\\dave\\Documents\\a.pdf",
+        "D:\\scans\\deep\\er\\x.pdf",
+        "C:\\Users\\dave\\Desktop\\c.pdf",
+        "\\\\server\\share\\s.pdf",
+    };
+    const RecentNode root = build_recent_tree(recent);
+    // Top level: drives and the UNC server, sorted by label (a backslash sorts after letters).
+    CHECK(root.children.size() == 3);
+    if (root.children.size() != 3) return;
+    CHECK(root.children[0].label == "C:\\Users\\dave");  // single-child chain collapsed
+    CHECK(root.children[1].label == "D:\\scans\\deep\\er");
+    CHECK(root.children[2].label == "\\\\server\\share");
+    const RecentNode& dave = root.children[0];
+    CHECK(dave.path == "C:\\Users\\dave");
+    CHECK(dave.children.size() == 2);
+    if (dave.children.size() != 2) return;
+    CHECK(dave.children[0].label == "Desktop" && dave.children[1].label == "Documents");
+    const RecentNode& docs = dave.children[1];
+    // Files keep recent order (b before a) and carry their index.
+    CHECK(docs.children.size() == 2);
+    if (docs.children.size() != 2) return;
+    CHECK(docs.children[0].label == "b.pdf" && docs.children[0].recent_index == 0 && docs.children[1].recent_index == 1);
+    CHECK(docs.children[0].is_file && docs.children[0].path == recent[0]);
+    CHECK(root.children[1].children.size() == 1 && root.children[1].children[0].label == "x.pdf");
+    CHECK(root.children[2].children.size() == 1 && root.children[2].children[0].label == "s.pdf");
+    CHECK(build_recent_tree({}).children.empty());
+    CHECK(build_recent_tree({"loose.pdf"}).children.size() == 1 && build_recent_tree({"loose.pdf"}).children[0].is_file);
+    CHECK(recent_file_name("C:/x/y.pdf") == "y.pdf" && recent_directory("C:\\x\\y.pdf") == "C:\\x");
 }
 
 static void test_sample_pdf() {
@@ -177,6 +214,7 @@ int main() {
     test_scrolling();
     test_rotation_of_boxes();
     test_settings();
+    test_recent_tree();
     test_sample_pdf();
     if (failures) { std::printf("%d check(s) failed\n", failures); return 1; }
     std::printf("app logic tests passed\n");

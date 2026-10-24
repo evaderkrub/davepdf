@@ -49,7 +49,7 @@ function(davepdf_warnings target)
 endfunction()
 
 # Application state and logic: no ImGui, no SDL, no PDFium.
-add_library(davepdf_core STATIC src/app/viewer.cpp src/app/settings.cpp src/app/sample_pdf.cpp)
+add_library(davepdf_core STATIC src/app/viewer.cpp src/app/settings.cpp src/app/sample_pdf.cpp src/app/recent_tree.cpp)
 target_include_directories(davepdf_core PUBLIC src)
 davepdf_warnings(davepdf_core)
 

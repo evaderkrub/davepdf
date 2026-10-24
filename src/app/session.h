@@ -113,6 +113,8 @@ struct Session {
     bool show_goto = false;
     bool show_password = false;
     bool show_shortcuts = false;
+    bool confirm_clear_recent = false;
+    bool adopt_new_panels = false;   // saved layout predates some panels: dock them once
     std::string password;
     int goto_input = 1;
     int theme = 0;

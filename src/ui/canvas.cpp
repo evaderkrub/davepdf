@@ -214,7 +214,8 @@ void draw_canvas(Session& s) {
     int hovered_char = -1;
     if (hovered_page >= 0 && !hovered_link && !memory.dragging) {
         const RectF point = rotate_normalized({hovered_norm.x, hovered_norm.y, 0, 0}, (360 - s.view.rotation) % 360);
-        hovered_char = platform::text_index_at(s, hovered_page, point.x, point.y);
+        // The press frame waits for the engine so a click on text is never mistaken for a pan.
+        hovered_char = platform::text_index_at(s, hovered_page, point.x, point.y, ImGui::IsItemActivated());
         if (hovered_char >= 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
     }
     if (ImGui::IsItemActivated()) {

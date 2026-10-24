@@ -63,6 +63,8 @@ constexpr size_t kUploadBudgetBytes = 48ull * 1024 * 1024;
 // Pages wider than this get a quick half-size pass first when nothing cached
 // can stand in for them.
 constexpr int kPreviewThreshold = 600;
+// Layout schema: 1 = Pages/Outline/Properties, 2 = + Search results, Recent.
+constexpr int kLayoutVersion = 2;
 
 struct App {
     Session session;
@@ -337,11 +339,12 @@ bool App::init(int argc, char** argv) {
         session.theme = std::clamp(loaded.theme, 0, fwThemeCount() - 1);
         session.scale = fwClampUiScale(loaded.scale);
         session.show_sidebar = loaded.show_sidebar;
-        session.sidebar_tab = std::clamp(loaded.sidebar_tab, 0, 1);
+        session.sidebar_tab = std::clamp(loaded.sidebar_tab, 0, 2);
         session.show_properties = loaded.show_properties;
         session.invert_pages = loaded.invert_pages;
         session.view.fit = static_cast<FitMode>(loaded.fit);
         session.recent = loaded.recent;
+        session.adopt_new_panels = loaded.layout_version < kLayoutVersion;
         saved = loaded;
     }
     session.dpi = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
@@ -414,6 +417,7 @@ void App::persist(bool force) {
     now.show_properties = session.show_properties;
     now.invert_pages = session.invert_pages;
     now.fit = static_cast<int>(session.view.fit);
+    now.layout_version = kLayoutVersion;
     now.recent = session.recent;
     const std::string text = serialize_settings(now);
     if (force || text != serialize_settings(saved)) {
@@ -620,11 +624,12 @@ void copy_page_text(Session& s, int page) {
     s.status = "Copied the text of page " + std::to_string(page + 1);
 }
 
-int text_index_at(Session& s, int page, float nx, float ny) {
+int text_index_at(Session& s, int page, float nx, float ny, bool wait) {
     App& app = *g_app;
     if (!s.has_document || !s.view.valid_page(page)) return -1;
-    std::unique_lock<std::mutex> lock(app.doc.mutex(), std::try_to_lock);
-    if (!lock.owns_lock() || !app.doc.is_open()) return -1;  // hover simply re-asks next frame
+    std::unique_lock<std::mutex> lock(app.doc.mutex(), std::defer_lock);
+    if (wait) lock.lock(); else if (!lock.try_lock()) return -1;  // hover simply re-asks next frame
+    if (!app.doc.is_open()) return -1;
     return app.doc.char_index_at(page, nx, ny);
 }
 
@@ -660,6 +665,23 @@ void set_invert_pages(Session& s, bool invert) {
     s.invert_pages = invert;
     // Cached textures hold the other polarity; a new generation retires them.
     ++s.render_generation;
+}
+
+bool recent_exists(const std::string& utf8_path) {
+    struct Probe { bool exists; Clock::time_point checked; };
+    static std::unordered_map<std::string, Probe> probes;
+    const auto now = Clock::now();
+    auto it = probes.find(utf8_path);
+    if (it != probes.end() && now - it->second.checked < std::chrono::seconds(5)) return it->second.exists;
+    std::error_code ec;
+    const bool exists = std::filesystem::is_regular_file(from_utf8(utf8_path), ec);
+    probes[utf8_path] = {exists, now};
+    return exists;
+}
+
+void reveal_recent(Session& s, const std::string& utf8_path) {
+    std::string error;
+    if (!host::reveal_in_folder(utf8_path, error)) s.error = error;
 }
 
 void go_to_page(Session& s, int page) {

@@ -22,13 +22,15 @@ void draw_workspace(Session& session);
 void draw_canvas(Session& session);            // canvas.cpp
 void draw_pages_panel(Session& session);       // panels.cpp
 void draw_outline_panel(Session& session);
+void draw_recent_panel(Session& session);
 void draw_properties_panel(Session& session);
 void draw_search_results_panel(Session& session);
 void draw_dialogs(Session& session);           // dialogs.cpp
 
 // Shared helpers (workspace.cpp).
 float ui_scale(const Session& session);        // GUI scale times monitor scale
-bool icon_button(const char* icon, const char* label, bool enabled = true, bool active = false);
+// `label` is the ImGui ID and, unless `tooltip` is given, the hover text.
+bool icon_button(const char* icon, const char* label, bool enabled = true, bool active = false, const char* tooltip = nullptr);
 void toolbar_divider();
 void zoom_to(Session& session, float zoom);    // switches to manual zoom
 void zoom_step_view(Session& session, bool in);

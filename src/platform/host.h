@@ -19,4 +19,6 @@ std::filesystem::path settings_directory();
 void decorate_window(SDL_Window* window);
 // Hands an http(s) or mailto link to the default browser. Other schemes are refused.
 bool open_external(const std::string& uri, std::string& error);
+// Opens the file's folder in the shell with the file selected.
+bool reveal_in_folder(const std::string& utf8_path, std::string& error);
 }
