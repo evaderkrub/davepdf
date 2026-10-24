@@ -21,4 +21,10 @@ void decorate_window(SDL_Window* window);
 bool open_external(const std::string& uri, std::string& error);
 // Opens the file's folder in the shell with the file selected.
 bool reveal_in_folder(const std::string& utf8_path, std::string& error);
+// Default-viewer support. Registration writes the per-user handler keys for
+// this executable (no administrator rights); Windows then insists the person
+// picks the default themselves, so the Settings page is opened for them.
+bool register_pdf_handler(std::string& error);
+bool pdf_handler_registered();
+bool open_default_apps_settings(std::string& error);
 }

@@ -42,6 +42,10 @@ void close_document(Session& session);
 // Recent panel helpers: a cached existence check (re-tested every few
 // seconds) and "show in folder".
 bool recent_exists(const std::string& utf8_path);
+// Registers this build as a PDF viewer for the current user and opens the
+// Windows Default apps page where the person picks it.
+void make_default_viewer(Session& session);
+bool is_default_viewer_registered();
 void reveal_recent(Session& session, const std::string& utf8_path);
 
 } // namespace davepdf::platform

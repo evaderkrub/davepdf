@@ -79,6 +79,7 @@ struct App {
     int find_start_page = 0;
 
     bool testing = false;
+    bool early_exit = false;   // a command-line task ran instead of the window
     int smoke_frames = 0;
     std::string shot_path;
     int frames = 0, result = 0;
@@ -324,6 +325,17 @@ bool App::init(int argc, char** argv) {
         else if (arg == "--smoke") smoke_frames = 8;
         else if (arg == "--sample") open_sample = true;
         else if (arg == "--shot" && i + 1 < argc) shot_path = argv[++i];
+        else if (arg == "--register") {
+            // Scriptable registration: write the keys, open Settings, exit.
+            std::string error;
+            const bool ok = host::register_pdf_handler(error) && host::open_default_apps_settings(error);
+            if (!ok) std::fprintf(stderr, "davepdf: %s\n", error.c_str());
+            pdf_shutdown();
+            SDL_Quit();
+            result = ok ? 0 : 1;
+            early_exit = true;
+            return false;
+        }
         else if (arg.rfind("--", 0) != 0) open_at_start = arg;
     }
     const auto base = executable_directory();
@@ -667,6 +679,16 @@ void set_invert_pages(Session& s, bool invert) {
     ++s.render_generation;
 }
 
+void make_default_viewer(Session& s) {
+    std::string error;
+    if (!host::register_pdf_handler(error)) { s.error = error; return; }
+    if (!host::open_default_apps_settings(error)) { s.error = error; return; }
+    s.notice = "davepdf is now registered as a PDF viewer for your account.\n\nWindows only lets you choose the default yourself: in the Settings page that just opened, pick davepdf next to .pdf. From then on double-clicking a PDF opens it here.";
+    s.status = "Registered as a PDF viewer";
+}
+
+bool is_default_viewer_registered() { return host::pdf_handler_registered(); }
+
 bool recent_exists(const std::string& utf8_path) {
     struct Probe { bool exists; Clock::time_point checked; };
     static std::unordered_map<std::string, Probe> probes;
@@ -695,7 +717,7 @@ void go_to_page(Session& s, int page) {
 int run(int argc, char** argv) {
     SDL_SetMainReady();
     App app;
-    if (!app.init(argc, argv)) return 1;
+    if (!app.init(argc, argv)) return app.early_exit ? app.result : 1;
     while (app.frame()) {}
     return app.shutdown();
 }

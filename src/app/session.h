@@ -68,6 +68,7 @@ struct Session {
     bool has_document = false;
     std::string status;
     std::string error;    // non-empty opens the message modal
+    std::string notice;   // non-empty opens an informational modal
 
     // Find.
     bool show_find = false;

@@ -12,6 +12,8 @@ The build stages the application in `C:\buildfiles\davepdf\release\portable\dave
 cmake --install C:\buildfiles\davepdf\release --prefix C:\buildfiles\davepdf\dist\davepdf
 ```
 
+**Default PDF viewer**: choose **Help > Make davepdf the default PDF viewer...** (or run `davepdf.exe --register`). This writes the per-user file-association keys for this copy of the executable, no administrator rights needed, and opens the Windows Default apps page where you pick davepdf for `.pdf`. Windows does not allow programs to set that choice silently. If you move the folder, run it again.
+
 Command line: `davepdf.exe file.pdf` opens a document, `davepdf.exe --sample` opens the built-in sample, `davepdf.exe --smoke` renders eight frames and exits, and `davepdf.exe --shot out.bmp` saves a screenshot of the first frames and exits. Dropping a PDF onto the window opens it.
 
 ## What it does

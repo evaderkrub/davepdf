@@ -85,6 +85,62 @@ bool open_external(const std::string& uri, std::string& error) {
     return true;
 }
 
+namespace {
+bool set_string(const wchar_t* key, const wchar_t* value_name, const std::wstring& value) {
+    return RegSetKeyValueW(HKEY_CURRENT_USER, key, value_name, REG_SZ, value.c_str(), static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t))) == ERROR_SUCCESS;
+}
+std::wstring exe_path() {
+    std::wstring buffer(32768, L'\0');
+    const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    buffer.resize(length);
+    return buffer;
+}
+} // namespace
+
+bool register_pdf_handler(std::string& error) {
+    // The layout Windows documents for a desktop app that offers file
+    // associations: a ProgID under Classes, a Capabilities block, and an
+    // entry in RegisteredApplications so Default Apps can list it. All under
+    // HKEY_CURRENT_USER so a portable copy can do it without elevation.
+    const std::wstring exe = exe_path();
+    const std::wstring command = L"\"" + exe + L"\" \"%1\"";
+    const std::wstring icon = L"\"" + exe + L"\",0";
+    bool ok = true;
+    ok &= set_string(L"Software\\Classes\\davepdf.Document", nullptr, L"PDF Document");
+    ok &= set_string(L"Software\\Classes\\davepdf.Document", L"FriendlyTypeName", L"PDF Document");
+    ok &= set_string(L"Software\\Classes\\davepdf.Document\\DefaultIcon", nullptr, icon);
+    ok &= set_string(L"Software\\Classes\\davepdf.Document\\shell\\open", nullptr, L"Open with davepdf");
+    ok &= set_string(L"Software\\Classes\\davepdf.Document\\shell\\open\\command", nullptr, command);
+    ok &= set_string(L"Software\\Classes\\.pdf\\OpenWithProgids", L"davepdf.Document", L"");
+    ok &= set_string(L"Software\\Classes\\Applications\\davepdf.exe", L"FriendlyAppName", L"davepdf");
+    ok &= set_string(L"Software\\Classes\\Applications\\davepdf.exe\\shell\\open\\command", nullptr, command);
+    ok &= set_string(L"Software\\Classes\\Applications\\davepdf.exe\\SupportedTypes", L".pdf", L"");
+    ok &= set_string(L"Software\\davepdf\\Capabilities", L"ApplicationName", L"davepdf");
+    ok &= set_string(L"Software\\davepdf\\Capabilities", L"ApplicationDescription", L"A fast, portable PDF viewer");
+    ok &= set_string(L"Software\\davepdf\\Capabilities\\FileAssociations", L".pdf", L"davepdf.Document");
+    ok &= set_string(L"Software\\RegisteredApplications", L"davepdf", L"Software\\davepdf\\Capabilities");
+    if (!ok) { error = "Windows refused to write the registration keys for the current user."; return false; }
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    return true;
+}
+
+bool pdf_handler_registered() {
+    wchar_t buffer[4096]{};
+    DWORD size = sizeof buffer;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Classes\\davepdf.Document\\shell\\open\\command", nullptr, RRF_RT_REG_SZ, nullptr, buffer, &size) != ERROR_SUCCESS) return false;
+    std::wstring command(buffer), exe = exe_path();
+    for (auto& c : command) c = static_cast<wchar_t>(towlower(c));
+    for (auto& c : exe) c = static_cast<wchar_t>(towlower(c));
+    return command.find(exe) != std::wstring::npos;
+}
+
+bool open_default_apps_settings(std::string& error) {
+    // Windows 11 opens the app's own page; older builds fall back to the list.
+    const auto status = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"ms-settings:defaultapps?registeredAppUser=davepdf", nullptr, nullptr, SW_SHOWNORMAL));
+    if (status <= 32) { error = "Windows could not open the Default apps settings page."; return false; }
+    return true;
+}
+
 bool reveal_in_folder(const std::string& utf8_path, std::string& error) {
     const std::wstring arguments = L"/select,\"" + widen(utf8_path) + L"\"";
     const auto status = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"explorer.exe", arguments.c_str(), nullptr, SW_SHOWNORMAL));

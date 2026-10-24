@@ -122,6 +122,9 @@ void menu(Session& s) {
     }
     if (ImGui::BeginMenu("Help")) {
         if (ImGui::MenuItem(menu_label(ICON_MD_KEYBOARD, "Keyboard shortcuts").c_str(), "F1")) s.show_shortcuts = true;
+        ImGui::Separator();
+        if (ImGui::MenuItem(menu_label(ICON_MD_PICTURE_AS_PDF, "Make davepdf the default PDF viewer...").c_str(), nullptr, platform::is_default_viewer_registered())) platform::make_default_viewer(s);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Registers this copy for your account and opens Windows' Default apps page to pick it.");
         if (ImGui::MenuItem("About davepdf")) s.show_about = true;
         ImGui::EndMenu();
     }

@@ -158,6 +158,20 @@ void draw_dialogs(Session& s) {
         ImGui::EndPopup();
     }
 
+    // Informational notices (same shape as errors, calmer icon).
+    if (!s.notice.empty()) ImGui::OpenPopup("davepdf notice");
+    center_next_window();
+    if (ImGui::BeginPopupModal("davepdf notice", nullptr, modal_flags)) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.accent), ICON_MD_INFO_OUTLINE);
+        ImGui::SameLine();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 460 * us);
+        ImGui::TextUnformatted(s.notice.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+        if (ImGui::Button("OK", ImVec2(100 * us, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_Enter)) { s.notice.clear(); ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+
     // Errors.
     if (!s.error.empty()) ImGui::OpenPopup("davepdf");
     center_next_window();
