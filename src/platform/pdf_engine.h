@@ -43,6 +43,12 @@ public:
     bool page_text(int page, std::string& utf8, std::string& error);
     // Appends every occurrence on the page, in reading order.
     bool search(int page, const std::string& utf8, bool match_case, std::vector<SearchHit>& out);
+    // Text selection support. Positions are normalised to the unrotated page.
+    // Returns -1 when no character is within tolerance of the point.
+    int char_index_at(int page, float nx, float ny);
+    int char_count(int page);
+    std::vector<RectF> text_rects(int page, int start, int count);
+    std::string text_range(int page, int start, int count);
 
 private:
     struct Impl;

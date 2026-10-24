@@ -15,6 +15,8 @@ std::string serialize_settings(const Settings& s) {
     out << "sidebar=" << (s.show_sidebar ? 1 : 0) << '\n';
     out << "sidebar_tab=" << s.sidebar_tab << '\n';
     out << "properties=" << (s.show_properties ? 1 : 0) << '\n';
+    out << "invert=" << (s.invert_pages ? 1 : 0) << '\n';
+    out << "fit=" << s.fit << '\n';
     for (const auto& path : s.recent) out << "recent=" << path << '\n';
     return out.str();
 }
@@ -33,6 +35,8 @@ Settings parse_settings(const std::string& text) {
         else if (key == "sidebar") s.show_sidebar = value != "0";
         else if (key == "sidebar_tab") s.sidebar_tab = std::atoi(value.c_str());
         else if (key == "properties") s.show_properties = value != "0";
+        else if (key == "invert") s.invert_pages = value != "0";
+        else if (key == "fit") { const int f = std::atoi(value.c_str()); if (f >= 0 && f <= 2) s.fit = f; }
         else if (key == "recent" && !value.empty() && s.recent.size() < kMaxRecentFiles) s.recent.push_back(value);
     }
     return s;

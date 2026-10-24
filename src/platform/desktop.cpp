@@ -181,6 +181,8 @@ void App::open_bytes(std::string bytes, const std::filesystem::path& path, const
     s.current_hit = -1;
     s.find_progress = 0;
     s.find_dirty = !s.find_text.empty();
+    s.selection.clear();
+    s.selecting = false;
     s.password.clear();
     s.show_password = false;
     s.pending_path.clear();
@@ -276,6 +278,8 @@ bool App::init(int argc, char** argv) {
         session.show_sidebar = loaded.show_sidebar;
         session.sidebar_tab = std::clamp(loaded.sidebar_tab, 0, 1);
         session.show_properties = loaded.show_properties;
+        session.invert_pages = loaded.invert_pages;
+        session.view.fit = static_cast<FitMode>(loaded.fit);
         session.recent = loaded.recent;
         saved = loaded;
     }
@@ -347,6 +351,8 @@ void App::persist(bool force) {
     now.show_sidebar = session.show_sidebar;
     now.sidebar_tab = session.sidebar_tab;
     now.show_properties = session.show_properties;
+    now.invert_pages = session.invert_pages;
+    now.fit = static_cast<int>(session.view.fit);
     now.recent = session.recent;
     const std::string text = serialize_settings(now);
     if (force || text != serialize_settings(saved)) {
@@ -465,6 +471,8 @@ void close_document(Session& s) {
     s.info = {};
     s.hits.clear();
     s.current_hit = -1;
+    s.selection.clear();
+    s.selecting = false;
     s.show_find = false;
     s.status = "Closed";
     ++s.render_generation;
@@ -489,6 +497,11 @@ PageImage page_image(Session& s, int page, int width, int height) {
         std::string error;
         ++app.frame_renders;
         if (app.doc.render(page, width, height, s.view.rotation, pixels, error)) {
+            if (s.invert_pages) {
+                // Night reading: invert colour, keep alpha. Done on the CPU
+                // once per rendering; the cache then holds the inverted page.
+                for (size_t i = 0; i + 3 < pixels.size(); i += 4) { pixels[i] = static_cast<unsigned char>(255 - pixels[i]); pixels[i + 1] = static_cast<unsigned char>(255 - pixels[i + 1]); pixels[i + 2] = static_cast<unsigned char>(255 - pixels[i + 2]); }
+            }
             SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, width, height);
             if (texture) {
                 SDL_UpdateTexture(texture, nullptr, pixels.data(), width * 4);
@@ -534,6 +547,38 @@ void copy_page_text(Session& s, int page) {
     if (text.empty()) { s.status = "Page " + std::to_string(page + 1) + " has no text layer"; return; }
     if (!SDL_SetClipboardText(text.c_str())) { s.error = SDL_GetError(); return; }
     s.status = "Copied the text of page " + std::to_string(page + 1);
+}
+
+int text_index_at(Session& s, int page, float nx, float ny) {
+    App& app = *g_app;
+    if (!app.doc.is_open() || !s.view.valid_page(page)) return -1;
+    return app.doc.char_index_at(page, nx, ny);
+}
+
+void set_selection(Session& s, int page, int anchor, int focus) {
+    App& app = *g_app;
+    if (!app.doc.is_open() || !s.view.valid_page(page) || anchor < 0 || focus < 0) { s.selection.clear(); return; }
+    const bool same = s.selection.page == page && s.selection.anchor == anchor && s.selection.focus == focus;
+    s.selection.page = page;
+    s.selection.anchor = anchor;
+    s.selection.focus = focus;
+    if (!same) s.selection.rects = app.doc.text_rects(page, s.selection.first(), s.selection.count());
+}
+
+void copy_selection_or_page(Session& s) {
+    App& app = *g_app;
+    if (s.selection.empty()) { copy_page_text(s, s.view.current_page); return; }
+    const std::string text = app.doc.text_range(s.selection.page, s.selection.first(), s.selection.count());
+    if (text.empty()) { s.status = "The selection has no text"; return; }
+    if (!SDL_SetClipboardText(text.c_str())) { s.error = SDL_GetError(); return; }
+    s.status = "Copied " + std::to_string(s.selection.count()) + (s.selection.count() == 1 ? " character" : " characters");
+}
+
+void set_invert_pages(Session& s, bool invert) {
+    if (s.invert_pages == invert) return;
+    s.invert_pages = invert;
+    // Cached textures hold the other polarity; a new generation retires them.
+    ++s.render_generation;
 }
 
 void go_to_page(Session& s, int page) {

@@ -53,6 +53,9 @@ static void reset_session(Session& s) {
     s.view.fit = FitMode::Width;
     s.view.zoom = 1.0f;
     s.view.rotation = 0;
+    s.selection.clear();
+    s.selecting = false;
+    s.invert_pages = false;
 }
 
 static void open_sample(ImGuiTestContext* ctx, Session& s) {
@@ -283,6 +286,73 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         ctx->Yield(3);
         IM_CHECK(s.scroll_y > before + 60);
         IM_CHECK_EQ(s.view.current_page, 0);
+    };
+
+    test = IM_REGISTER_TEST(engine, "davepdf", "select_text_copy_and_invert");
+    test->UserData = &session;
+    test->TestFunc = [](ImGuiTestContext* ctx) {
+        auto& s = *static_cast<Session*>(ctx->Test->UserData);
+        reset_session(s);
+        open_sample(ctx, s);
+        // Locate the title on page 1 through a search, then drag across it on screen.
+        s.find_text = "davepdf sample";
+        s.find_dirty = true;
+        wait_for_search(ctx, s);
+        IM_CHECK(s.hits.size() == 3 && s.hits[0].page == 0);
+        const RectF title = s.hits[0].rects[0];
+        ImGuiTestItemInfo canvas = ctx->WindowInfo("//Document/CanvasHost/Canvas");
+        IM_CHECK(canvas.Window != nullptr);
+        const Layout layout = layout_pages(s.view, s.dpi);
+        const RectF page_rect = layout.pages[0].rect;
+        const float origin_x = canvas.Window->InnerRect.Min.x - canvas.Window->Scroll.x + std::max(0.0f, (canvas.Window->InnerRect.GetWidth() - layout.width) / 2);
+        const float origin_y = canvas.Window->InnerRect.Min.y - canvas.Window->Scroll.y;
+        const ImVec2 from(origin_x + page_rect.x + (title.x + 0.01f) * page_rect.w, origin_y + page_rect.y + (title.y + title.h / 2) * page_rect.h);
+        const ImVec2 to(origin_x + page_rect.x + (title.x + title.w - 0.01f) * page_rect.w, from.y);
+        const float scroll_before = s.scroll_y;
+        ctx->MouseMoveToPos(from);
+        ctx->Yield(2);
+        ctx->MouseDown(ImGuiMouseButton_Left);
+        ctx->MouseMoveToPos(ImVec2((from.x + to.x) / 2, from.y));
+        ctx->MouseMoveToPos(to);
+        ctx->Yield(2);
+        ctx->MouseUp(ImGuiMouseButton_Left);
+        ctx->Yield(3);
+        IM_CHECK(!s.selection.empty());
+        IM_CHECK_EQ(s.selection.page, 0);
+        IM_CHECK(s.selection.count() >= 8);
+        IM_CHECK(!s.selection.rects.empty());
+        IM_CHECK(std::fabs(s.scroll_y - scroll_before) < 0.5f);  // selecting does not pan
+        capture_frame(ctx, "selection");
+        SDL_SetClipboardText("");
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_C);
+        ctx->Yield(3);
+        char* clip = SDL_GetClipboardText();
+        const std::string copied = clip ? clip : "";
+        SDL_free(clip);
+        IM_CHECK(copied.find("davepdf") != std::string::npos || copied.find("sample") != std::string::npos);
+        IM_CHECK(copied.find("Welcome") == std::string::npos);  // not the whole page
+        // Escape clears; Ctrl+C then copies the whole page.
+        ctx->MouseMoveToPos(from);
+        ctx->KeyPress(ImGuiKey_Escape);
+        ctx->Yield(2);
+        IM_CHECK(s.selection.empty());
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_C);
+        ctx->Yield(3);
+        clip = SDL_GetClipboardText();
+        const std::string page_text = clip ? clip : "";
+        SDL_free(clip);
+        IM_CHECK(page_text.find("Welcome") != std::string::npos);
+        // Night mode flips the page pixels and retires the cached textures.
+        const unsigned generation = s.render_generation;
+        ctx->SetRef("Workspace");
+        ctx->MenuClick("View/Invert page colours");
+        ctx->Yield(6);
+        IM_CHECK(s.invert_pages);
+        IM_CHECK(s.render_generation > generation);
+        capture_frame(ctx, "inverted");
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_N);
+        ctx->Yield(3);
+        IM_CHECK(!s.invert_pages);
     };
 
     test = IM_REGISTER_TEST(engine, "davepdf", "scale_theme_properties_and_modal_about");

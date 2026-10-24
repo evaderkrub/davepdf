@@ -134,8 +134,10 @@ void draw_dialogs(Session& s) {
             shortcut_row("Ctrl+1  /  Ctrl+2  /  Ctrl+0", "Actual size, fit width, fit page");
             shortcut_row("Ctrl+R  /  Ctrl+Shift+R", "Rotate clockwise / counter-clockwise");
             shortcut_row("Ctrl+B  /  Ctrl+I", "Toggle the sidebar / properties");
-            shortcut_row("Ctrl+C", "Copy the text of the current page");
-            shortcut_row("Drag", "Pan the page");
+            shortcut_row("Ctrl+C", "Copy the selection, or the whole page's text");
+            shortcut_row("Ctrl+Shift+N", "Invert page colours (night reading)");
+            shortcut_row("Drag on text / elsewhere", "Select text / pan the page");
+            shortcut_row("Escape", "Clear the selection or close find");
             ImGui::EndTable();
         }
         ImGui::Spacing();

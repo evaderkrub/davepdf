@@ -14,6 +14,8 @@ struct Settings {
     bool show_sidebar = true;
     int sidebar_tab = 0;  // 0 pages, 1 outline
     bool show_properties = false;
+    bool invert_pages = false;
+    int fit = 1;          // 0 manual, 1 width, 2 page (FitMode order)
     std::vector<std::string> recent;  // most recent first, UTF-8 paths
 };
 

@@ -120,9 +120,12 @@ static void test_rotation_of_boxes() {
 static void test_settings() {
     Settings s;
     s.theme = 2; s.scale = 1.25f; s.show_sidebar = false; s.sidebar_tab = 1; s.show_properties = true;
+    s.invert_pages = true; s.fit = 2;
     s.recent = {"C:/docs/a.pdf", "D:/b c.pdf"};
     const Settings back = parse_settings(serialize_settings(s));
     CHECK(back.theme == 2);
+    CHECK(back.invert_pages && back.fit == 2);
+    CHECK(parse_settings("fit=7\n").fit == 1);
     CHECK(near(back.scale, 1.25f));
     CHECK(!back.show_sidebar && back.sidebar_tab == 1 && back.show_properties);
     CHECK(back.recent.size() == 2 && back.recent[1] == "D:/b c.pdf");

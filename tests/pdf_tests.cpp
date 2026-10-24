@@ -88,6 +88,20 @@ int main() {
         // The title sits in the header band near the top left.
         CHECK(hits[0].page == 0 && hits[0].rects[0].y < 0.1f && hits[0].rects[0].x < 0.1f);
     }
+    // Selection support around the first hit: the character under its centre
+    // belongs to the match, the range reads back as text, and blank paper has no character.
+    if (!hits.empty()) {
+        const SearchHit& title = hits[0];
+        CHECK(title.count == 14);
+        CHECK(doc.text_range(0, title.start, title.count) == "davepdf sample");
+        const RectF& r = title.rects[0];
+        const int under = doc.char_index_at(0, r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+        CHECK(under >= title.start && under < title.start + title.count);
+        CHECK(doc.text_rects(0, title.start, title.count).size() >= 1);
+        CHECK(doc.char_count(0) > 100);
+    }
+    CHECK(doc.char_index_at(0, 0.98f, 0.98f) == -1);
+    CHECK(doc.text_range(0, 0, 0).empty());
     hits.clear();
     CHECK(doc.search(0, "DAVEPDF SAMPLE", true, hits));
     CHECK(hits.empty());

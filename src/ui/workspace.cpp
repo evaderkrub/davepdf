@@ -63,7 +63,10 @@ void menu(Session& s) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
-        if (ImGui::MenuItem(menu_label(ICON_MD_CONTENT_COPY, "Copy page text").c_str(), "Ctrl+C", false, s.has_document)) platform::copy_page_text(s, s.view.current_page);
+        if (ImGui::MenuItem(menu_label(ICON_MD_CONTENT_COPY, "Copy").c_str(), "Ctrl+C", false, s.has_document)) platform::copy_selection_or_page(s);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Copies the selected text, or the whole page when nothing is selected.");
+        if (ImGui::MenuItem("Copy page text", nullptr, false, s.has_document)) platform::copy_page_text(s, s.view.current_page);
+        if (ImGui::MenuItem("Clear selection", "Escape", false, !s.selection.empty())) s.selection.clear();
         ImGui::Separator();
         if (ImGui::MenuItem(menu_label(ICON_MD_SEARCH, "Find...").c_str(), "Ctrl+F", false, s.has_document)) open_find(s);
         if (ImGui::MenuItem("Find next", "F3", false, !s.hits.empty())) find_step(s, 1);
@@ -89,6 +92,9 @@ void menu(Session& s) {
         ImGui::Separator();
         if (ImGui::MenuItem(menu_label(ICON_MD_ROTATE_RIGHT, "Rotate clockwise").c_str(), "Ctrl+R", false, s.has_document)) rotate_view(s, 1);
         if (ImGui::MenuItem(menu_label(ICON_MD_ROTATE_LEFT, "Rotate counter-clockwise").c_str(), "Ctrl+Shift+R", false, s.has_document)) rotate_view(s, -1);
+        ImGui::Separator();
+        if (ImGui::MenuItem(menu_label(ICON_MD_DARK_MODE, "Invert page colours").c_str(), "Ctrl+Shift+N", s.invert_pages)) platform::set_invert_pages(s, !s.invert_pages);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Night reading: white pages become dark, the interface keeps its theme.");
         ImGui::Separator();
         if (ImGui::BeginMenu("Theme")) {
             for (int i = 0; i < fwThemeCount(); ++i) if (ImGui::MenuItem(fwThemeAt(i).szName, nullptr, s.theme == i)) { s.theme = i; fwRequestTheme(i); }
@@ -184,9 +190,11 @@ void toolbar(Session& s) {
     toolbar_divider();
     if (icon_button(ICON_MD_SEARCH, "Find", doc, s.show_find)) { if (s.show_find) close_find(s); else open_find(s); }
     // Right-aligned group.
-    const float right_group = ImGui::GetFrameHeight() * 2 + 4 * us;
+    const float right_group = ImGui::GetFrameHeight() * 3 + 8 * us;
     ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - right_group));
-    if (icon_button(ICON_MD_CONTENT_COPY, "Copy page text", doc)) platform::copy_page_text(s, s.view.current_page);
+    if (icon_button(ICON_MD_CONTENT_COPY, "Copy", doc)) platform::copy_selection_or_page(s);
+    ImGui::SameLine();
+    if (icon_button(ICON_MD_DARK_MODE, "Invert page colours", doc, s.invert_pages)) platform::set_invert_pages(s, !s.invert_pages);
     ImGui::SameLine();
     if (icon_button(ICON_MD_INFO_OUTLINE, "Properties", true, s.show_properties)) s.show_properties = !s.show_properties;
     ImGui::PopStyleVar();
@@ -251,6 +259,7 @@ void status_bar(Session& s) {
         const char* fit = s.view.fit == FitMode::Width ? "Fit width" : s.view.fit == FitMode::Page ? "Fit page" : "Custom";
         ImGui::Text("%s  %s", zoom_label(s).c_str(), fit);
         if (s.view.rotation) { ImGui::SameLine(0, 18 * us); ImGui::Text(ICON_MD_ROTATE_RIGHT " %d" "\xC2\xB0", s.view.rotation); }
+        if (!s.selection.empty()) { ImGui::SameLine(0, 18 * us); ImGui::Text("%d selected", s.selection.count()); }
         ImGui::SameLine(0, 18 * us);
         ImGui::TextUnformatted(s.info.file_name.c_str());
     } else {
@@ -361,7 +370,8 @@ void shortcuts(Session& s) {
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_2, route)) set_fit(s, FitMode::Width);
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_R, route)) rotate_view(s, 1);
     if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_R, route)) rotate_view(s, -1);
-    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, route) && !ImGui::GetIO().WantTextInput) platform::copy_page_text(s, s.view.current_page);
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, route) && !ImGui::GetIO().WantTextInput) platform::copy_selection_or_page(s);
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_N, route)) platform::set_invert_pages(s, !s.invert_pages);
 }
 
 void dock_layout(Session& s, ImGuiID dock, const ImGuiViewport* viewport) {

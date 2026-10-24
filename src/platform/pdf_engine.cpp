@@ -325,6 +325,43 @@ bool PdfDocument::page_text(int index, std::string& utf8, std::string& error) {
     return true;
 }
 
+int PdfDocument::char_index_at(int index, float nx, float ny) {
+    FPDF_TEXTPAGE text = impl_->text_page(index);
+    FPDF_PAGE page = impl_->page(index);
+    if (!text || !page) return -1;
+    double px = 0, py = 0;
+    if (!FPDF_DeviceToPage(page, 0, 0, kGrid, kGrid, 0, static_cast<int>(nx * kGrid), static_cast<int>(ny * kGrid), &px, &py)) return -1;
+    // A few points of slack so a drag that starts just beside a glyph still grabs it.
+    const int found = FPDFText_GetCharIndexAtPos(text, px, py, 3.0, 3.0);
+    return found >= 0 ? found : -1;
+}
+
+int PdfDocument::char_count(int index) {
+    FPDF_TEXTPAGE text = impl_->text_page(index);
+    return text ? std::max(0, FPDFText_CountChars(text)) : 0;
+}
+
+std::vector<RectF> PdfDocument::text_rects(int index, int start, int count) {
+    std::vector<RectF> rects;
+    FPDF_TEXTPAGE text = impl_->text_page(index);
+    FPDF_PAGE page = impl_->page(index);
+    if (!text || !page || count <= 0) return rects;
+    const int n = FPDFText_CountRects(text, start, count);
+    for (int i = 0; i < n; ++i) {
+        double left = 0, top = 0, right = 0, bottom = 0;
+        if (FPDFText_GetRect(text, i, &left, &top, &right, &bottom)) rects.push_back(normalize(page, left, top, right, bottom));
+    }
+    return rects;
+}
+
+std::string PdfDocument::text_range(int index, int start, int count) {
+    FPDF_TEXTPAGE text = impl_->text_page(index);
+    if (!text || count <= 0) return {};
+    std::vector<unsigned short> buffer(static_cast<size_t>(count) + 1, 0);
+    const int written = FPDFText_GetText(text, start, count, buffer.data());
+    return utf16_to_utf8(buffer.data(), written > 0 ? static_cast<size_t>(written) : 0);
+}
+
 bool PdfDocument::search(int index, const std::string& needle, bool match_case, std::vector<SearchHit>& out) {
     if (needle.empty()) return true;
     FPDF_TEXTPAGE text = impl_->text_page(index);
@@ -337,6 +374,8 @@ bool PdfDocument::search(int index, const std::string& needle, bool match_case, 
         SearchHit hit;
         hit.page = index;
         const int start = FPDFText_GetSchResultIndex(handle), count = FPDFText_GetSchCount(handle);
+        hit.start = start;
+        hit.count = count;
         const int rects = FPDFText_CountRects(text, start, count);
         for (int i = 0; i < rects; ++i) {
             double left = 0, top = 0, right = 0, bottom = 0;

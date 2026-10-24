@@ -28,6 +28,13 @@ bool page_image_pending();  // true while any requested size is still queued
 const std::vector<LinkBox>& page_links(Session& session, int page);
 void activate_link(Session& session, const LinkBox& link);
 void copy_page_text(Session& session, int page);
+// Text selection: character under a normalised page point (-1 if none),
+// updating the selection's boxes, and copying it (or, with no selection,
+// the whole current page) to the clipboard.
+int text_index_at(Session& session, int page, float nx, float ny);
+void set_selection(Session& session, int page, int anchor, int focus);
+void copy_selection_or_page(Session& session);
+void set_invert_pages(Session& session, bool invert);
 void go_to_page(Session& session, int page);
 void close_document(Session& session);
 

@@ -22,7 +22,20 @@ struct LinkBox {
 
 struct SearchHit {
     int page = 0;
+    int start = 0, count = 0;  // character range on the page
     std::vector<RectF> rects;  // normalised to the unrotated page
+};
+
+// A run of characters on one page, chosen with the mouse.
+struct TextSelection {
+    int page = -1;
+    int anchor = -1;            // character index where the drag started
+    int focus = -1;             // character index under the pointer
+    std::vector<RectF> rects;   // normalised to the unrotated page
+    bool empty() const { return page < 0 || anchor < 0 || focus < 0; }
+    int first() const { return anchor < focus ? anchor : focus; }
+    int count() const { return (anchor < focus ? focus - anchor : anchor - focus) + 1; }
+    void clear() { page = anchor = focus = -1; rects.clear(); }
 };
 
 struct DocumentInfo {
@@ -63,6 +76,12 @@ struct Session {
     int current_hit = -1;
     bool find_step_requested = false;  // next/previous requested from the interface
     int find_step_direction = 1;
+
+    TextSelection selection;
+    bool selecting = false;          // a selection drag is in progress
+
+    // Night reading: page pixels are inverted at upload, chrome is untouched.
+    bool invert_pages = false;
 
     ScrollRequest scroll;
     float scroll_y = 0;              // document pixels, kept for the status and tests

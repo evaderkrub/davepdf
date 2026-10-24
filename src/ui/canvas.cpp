@@ -40,6 +40,15 @@ void draw_page(Session& s, ImDrawList* dl, const PageRect& pr, ImVec2 origin, fl
     else dl->AddRectFilled(a, b, IM_COL32(255, 255, 255, 255));
     dl->AddRect(a, b, fwWithAlpha(p.border, 160), 0, 0, 1.0f);
 
+    // Text selection.
+    if (s.selection.page == pr.page) {
+        const ImU32 fill = fwThemeAt(fwThemeCurrentIndex()).selection;
+        for (const RectF& nr : s.selection.rects) {
+            const RectF r = rotate_normalized(nr, s.view.rotation);
+            dl->AddRectFilled(ImVec2(a.x + r.x * pr.rect.w, a.y + r.y * pr.rect.h), ImVec2(a.x + (r.x + r.w) * pr.rect.w, a.y + (r.y + r.h) * pr.rect.h), fill);
+        }
+    }
+
     // Search highlights.
     for (size_t i = 0; i < s.hits.size(); ++i) {
         const SearchHit& hit = s.hits[i];
@@ -140,7 +149,7 @@ void draw_canvas(Session& s) {
         if (ImGui::IsKeyPressed(ImGuiKey_PageUp) || (ImGui::IsKeyPressed(ImGuiKey_Space) && io.KeyShift)) scroll_y -= page_step;
         if (ImGui::IsKeyPressed(ImGuiKey_Home)) scroll_y = io.KeyCtrl ? 0 : scroll_to_page(layout, s.view.current_page, s.view.gap);
         if (ImGui::IsKeyPressed(ImGuiKey_End)) scroll_y = content_h;
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape) && s.show_find) close_find(s);
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) { if (s.show_find) close_find(s); else s.selection.clear(); }
     }
 
     // 5. The content item: sized to the stack so the scrollbars are right, and
@@ -150,7 +159,10 @@ void draw_canvas(Session& s) {
     const bool item_active = ImGui::IsItemActive();
     const bool item_hovered = ImGui::IsItemHovered();
     if (ImGui::IsItemActivated()) { memory.drag_origin = io.MousePos; memory.dragging = false; }
-    if (item_active && (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 4.0f))) {
+    // Panning: a drag that did not start on text (decided below, once the
+    // page under the pointer is known), or any middle-button drag.
+    const bool pan_drag = item_active && !s.selecting && (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 4.0f) || ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 4.0f));
+    if (pan_drag) {
         memory.dragging = true;
         scroll_x -= io.MouseDelta.x;
         scroll_y -= io.MouseDelta.y;
@@ -169,13 +181,18 @@ void draw_canvas(Session& s) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const LinkBox* hovered_link = nullptr;
     PageRect hovered_page_rect;
+    int hovered_page = -1;
+    ImVec2 hovered_norm;  // pointer position normalised to the hovered page, as displayed
     for (int page : visible_pages(layout, scroll_y, view_size.y, 1)) {
         const PageRect& pr = layout.pages[static_cast<size_t>(page)];
         draw_page(s, dl, pr, origin, us);
-        if (!item_hovered) continue;
-        // Link hit test on the page under the pointer.
+        if (!item_hovered && !(item_active && s.selecting)) continue;
         const ImVec2 a(origin.x + pr.rect.x, origin.y + pr.rect.y);
         if (io.MousePos.x < a.x || io.MousePos.y < a.y || io.MousePos.x > a.x + pr.rect.w || io.MousePos.y > a.y + pr.rect.h) continue;
+        hovered_page = page;
+        hovered_page_rect = pr;
+        hovered_norm = ImVec2((io.MousePos.x - a.x) / pr.rect.w, (io.MousePos.y - a.y) / pr.rect.h);
+        // Link hit test on the page under the pointer.
         for (const LinkBox& link : platform::page_links(s, page)) {
             const RectF r = rotate_normalized(link.rect, s.view.rotation);
             const ImVec2 la(a.x + r.x * pr.rect.w, a.y + r.y * pr.rect.h);
@@ -189,6 +206,21 @@ void draw_canvas(Session& s) {
             }
         }
     }
+    // Text under the pointer: the view rotation is undone to ask the engine.
+    int hovered_char = -1;
+    if (hovered_page >= 0 && !hovered_link && !memory.dragging) {
+        const RectF point = rotate_normalized({hovered_norm.x, hovered_norm.y, 0, 0}, (360 - s.view.rotation) % 360);
+        hovered_char = platform::text_index_at(s, hovered_page, point.x, point.y);
+        if (hovered_char >= 0) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+    }
+    if (ImGui::IsItemActivated()) {
+        // A press on text starts a selection; a press elsewhere clears it and pans.
+        s.selection.clear();
+        s.selecting = false;
+        if (hovered_char >= 0 && !hovered_link) { s.selecting = true; platform::set_selection(s, hovered_page, hovered_char, hovered_char); }
+    }
+    if (item_active && s.selecting && hovered_page == s.selection.page && hovered_char >= 0) platform::set_selection(s, s.selection.page, s.selection.anchor, hovered_char);
+    if (s.selecting) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
     if (hovered_link && !memory.dragging) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         if (ImGui::IsItemHovered()) {
@@ -200,7 +232,12 @@ void draw_canvas(Session& s) {
         const LinkBox link = *hovered_link;  // copy: activating may invalidate the cache
         platform::activate_link(s, link);
     }
-    if (ImGui::IsItemDeactivated()) memory.dragging = false;
+    if (ImGui::IsItemDeactivated()) {
+        memory.dragging = false;
+        s.selecting = false;
+        // A plain click on text selects nothing.
+        if (!s.selection.empty() && s.selection.count() <= 1 && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f)) s.selection.clear();
+    }
 
     // Progress hint while large pages are still rendering.
     if (platform::page_image_pending()) {
