@@ -189,14 +189,14 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         reset_session(s);
         open_sample(ctx, s);
         ctx->SetRef("Workspace");
-        ctx->MenuClick("Edit/Find...");
-        ctx->Yield(3);
-        IM_CHECK(s.show_find);
+        // The find box is always on the toolbar; typing into it is enough.
         ctx->SetRef("Document");
+        IM_CHECK(ctx->ItemExists("**/###FindText"));
         // Typing selects the first hit as it is found. ItemInputValue finishes
         // with Shift+Enter, which is "previous match" and wraps to the last hit.
         ctx->ItemInputValue("**/###FindText", "davepdf sample");
         wait_for_search(ctx, s);
+        IM_CHECK(s.show_find && s.show_results);
         IM_CHECK(s.hits.size() == 3);
         IM_CHECK_EQ(s.hits[0].page, 0);
         IM_CHECK_EQ(s.current_hit, 2);

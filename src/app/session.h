@@ -72,6 +72,7 @@ struct Session {
     // Find.
     bool show_find = false;
     bool focus_find = false;
+    int focus_find_frames = 0;       // keeps the keyboard in the find box while panels settle
     std::string find_text;
     bool find_match_case = false;
     bool find_dirty = false;         // text or options changed: restart the scan

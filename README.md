@@ -20,7 +20,7 @@ Command line: `davepdf.exe file.pdf` opens a document, `davepdf.exe --sample` op
 - **Reading**: all pages in one scrolled column, centred, with soft shadows. Scroll with the wheel, drag the page, or use the keyboard (arrows, Page Up/Down, Space, Home, End). The page counter follows the page that fills most of the view; type a number into it, or use **Go > Go to page** (Ctrl+G).
 - **Zoom**: presets from 25% to 1600%, zoom in/out, Ctrl+wheel around the pointer, 100% actual size (96 dpi), fit width and fit page. Fit modes follow window resizes.
 - **Rotation**: whole-document rotation in 90 degree steps.
-- **Search**: Ctrl+F opens a find bar and a **Search results** panel on the right. Results are gathered a few milliseconds per frame starting at the page being read; every hit is highlighted on the page, the current one in the accent colour, and Enter / Shift+Enter / F3 / Shift+F3 step through them. The panel lists each match in page order with its sentence context and position on the page; click one to jump to it. Match case is optional.
+- **Search**: a find box sits on the toolbar; typing into it starts the search and opens the **Search results** panel on the right (Ctrl+F just focuses the box). Results are gathered a few milliseconds per frame starting at the page being read; every hit is highlighted on the page, the current one in the accent colour, and Enter / Shift+Enter / F3 / Shift+F3 step through them. The panel lists each match in page order with its sentence context and position on the page; click one to jump to it. Match case is optional.
 - **Navigation aids**: a **Pages** panel with live thumbnails, an **Outline** panel for the document's bookmarks, and link annotations on the page: internal links jump to their page, web and mail links open in the default browser (other URI schemes are refused).
 - **Properties**: page count, file size, PDF version, encryption, the current page size in points, millimetres and inches, and the document metadata.
 - **Text selection**: drag across text to select it (the pointer becomes an I-beam over text; dragging elsewhere pans). Ctrl+C copies the selection, or the whole page's text layer when nothing is selected. Escape clears the selection.
@@ -32,7 +32,7 @@ Command line: `davepdf.exe file.pdf` opens a document, `davepdf.exe --sample` op
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+O / Ctrl+W | Open / close |
-| Ctrl+F, F3, Shift+F3 | Find, next match, previous match |
+| Ctrl+F, F3, Shift+F3 | Focus the find box, next match, previous match |
 | Ctrl+G | Go to page |
 | Page Down / Page Up / Space / Shift+Space | Scroll a screen |
 | Home / End | Top of the current page / end of the document |

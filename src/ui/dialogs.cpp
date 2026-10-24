@@ -125,7 +125,7 @@ void draw_dialogs(Session& s) {
         if (ImGui::BeginTable("keys", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
             shortcut_row("Ctrl+O", "Open a document");
             shortcut_row("Ctrl+W", "Close the document");
-            shortcut_row("Ctrl+F  /  F3  /  Shift+F3", "Find, next match, previous match");
+            shortcut_row("Ctrl+F  /  F3  /  Shift+F3", "Focus the find box, next match, previous match");
             shortcut_row("Ctrl+G", "Go to page");
             shortcut_row("Page Down / Page Up / Space", "Scroll a screen");
             shortcut_row("Home / End", "Top of the page / end of the document");

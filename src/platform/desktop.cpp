@@ -293,11 +293,16 @@ void App::find_pump() {
     }
     if (lock.owns_lock()) lock.unlock();
     if (s.find_step_requested) {
-        s.find_step_requested = false;
+        // A step typed before the scan has found anything waits for the scan
+        // (which may be a frame late when the render thread holds the engine)
+        // rather than being lost.
         if (!s.hits.empty()) {
+            s.find_step_requested = false;
             const int n = static_cast<int>(s.hits.size());
             s.current_hit = ((s.current_hit + s.find_step_direction) % n + n) % n;
             jump(s.hits[static_cast<size_t>(s.current_hit)]);
+        } else if (s.find_progress >= count) {
+            s.find_step_requested = false;
         }
     }
     if (s.find_select_hit >= 0) {

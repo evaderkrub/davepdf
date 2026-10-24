@@ -68,7 +68,7 @@ void menu(Session& s) {
         if (ImGui::MenuItem("Copy page text", nullptr, false, s.has_document)) platform::copy_page_text(s, s.view.current_page);
         if (ImGui::MenuItem("Clear selection", "Escape", false, !s.selection.empty())) s.selection.clear();
         ImGui::Separator();
-        if (ImGui::MenuItem(menu_label(ICON_MD_SEARCH, "Find...").c_str(), "Ctrl+F", false, s.has_document)) open_find(s);
+        if (ImGui::MenuItem(menu_label(ICON_MD_SEARCH, "Find").c_str(), "Ctrl+F", false, s.has_document)) open_find(s);
         if (ImGui::MenuItem("Find next", "F3", false, !s.hits.empty())) find_step(s, 1);
         if (ImGui::MenuItem("Find previous", "Shift+F3", false, !s.hits.empty())) find_step(s, -1);
         ImGui::EndMenu();
@@ -189,7 +189,51 @@ void toolbar(Session& s) {
     ImGui::SameLine();
     if (icon_button(ICON_MD_ROTATE_RIGHT, "Rotate right", doc)) rotate_view(s, 1);
     toolbar_divider();
-    if (icon_button(ICON_MD_SEARCH, "Find", doc, s.show_find)) { if (s.show_find) close_find(s); else open_find(s); }
+    // The find box lives on the toolbar: type and the search starts, no
+    // separate bar to open first. Ctrl+F only moves the keyboard focus here.
+    {
+        const auto& p = fwPaletteCurrent();
+        ImGui::BeginDisabled(!doc);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), ICON_MD_SEARCH);
+        ImGui::SameLine(0, 4 * us);
+        // Focus is re-applied for a few frames because a panel appearing or
+        // being focused in the same frame would otherwise steal it back.
+        if (s.focus_find) { s.focus_find = false; s.focus_find_frames = 3; }
+        if (s.focus_find_frames > 0) { ImGui::SetKeyboardFocusHere(); --s.focus_find_frames; }
+        const float right_reserve = ImGui::GetFrameHeight() * 7 + 120 * us;
+        ImGui::SetNextItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - right_reserve, 120 * us, 240 * us));
+        const bool entered = ImGui::InputTextWithHint("###FindText", "Find in document", &s.find_text, ImGuiInputTextFlags_EnterReturnsTrue);
+        const ImGuiID field = ImGui::GetItemID();
+        if (ImGui::IsItemEdited()) {
+            s.find_dirty = true;
+            s.show_find = true;
+            if (!s.find_text.empty()) s.show_results = true;
+        }
+        // Enter steps to the next hit, Shift+Enter to the previous. The field
+        // owns the Enter key and validates with key repeat, so a slow frame
+        // could turn one press into two; asking as the owner without repeat
+        // counts each press once. ConfigInputTextEnterKeepActive keeps the
+        // field active so Enter can be pressed again.
+        const bool pressed_once = ImGui::IsKeyPressed(ImGuiKey_Enter, ImGuiInputFlags_None, field) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, ImGuiInputFlags_None, field);
+        if (entered && pressed_once) find_step(s, ImGui::GetIO().KeyShift ? -1 : 1);
+        if (!s.find_text.empty()) {
+            ImGui::SameLine(0, 6 * us);
+            ImGui::AlignTextToFramePadding();
+            if (s.find_progress < s.view.page_count()) ImGui::TextDisabled("%zu...", s.hits.size());
+            else if (s.hits.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.warning), "0");
+            else ImGui::TextDisabled("%d/%zu", s.current_hit + 1, s.hits.size());
+        }
+        ImGui::SameLine(0, 4 * us);
+        if (icon_button(ICON_MD_KEYBOARD_ARROW_UP, "Previous match", !s.hits.empty())) find_step(s, -1);
+        ImGui::SameLine();
+        if (icon_button(ICON_MD_KEYBOARD_ARROW_DOWN, "Next match", !s.hits.empty())) find_step(s, 1);
+        ImGui::SameLine();
+        if (icon_button(ICON_MD_FORMAT_SIZE, "Match case", true, s.find_match_case)) { s.find_match_case = !s.find_match_case; s.find_dirty = true; }
+        ImGui::SameLine();
+        if (icon_button(ICON_MD_CLOSE, "Close find", !s.find_text.empty() || s.show_results)) close_find(s);
+        ImGui::EndDisabled();
+    }
     // Right-aligned group.
     const float right_group = ImGui::GetFrameHeight() * 3 + 8 * us;
     ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - right_group));
@@ -199,51 +243,6 @@ void toolbar(Session& s) {
     ImGui::SameLine();
     if (icon_button(ICON_MD_INFO_OUTLINE, "Properties", true, s.show_properties)) s.show_properties = !s.show_properties;
     ImGui::PopStyleVar();
-}
-
-// ---------------------------------------------------------------- find bar
-void find_bar(Session& s) {
-    if (!s.show_find) return;
-    const float us = ui_scale(s);
-    const auto& p = fwPaletteCurrent();
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, p.surface);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8 * us);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8 * us, 6 * us));
-    const float height = ImGui::GetFrameHeight() + 12 * us;
-    if (ImGui::BeginChild("FindBar", ImVec2(0, height), ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding)) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), ICON_MD_SEARCH);
-        ImGui::SameLine();
-        if (s.focus_find) { ImGui::SetKeyboardFocusHere(); s.focus_find = false; }
-        ImGui::SetNextItemWidth(std::max(160 * us, ImGui::GetContentRegionAvail().x - 300 * us));
-        const bool entered = ImGui::InputTextWithHint("###FindText", "Find in document", &s.find_text, ImGuiInputTextFlags_EnterReturnsTrue);
-        const ImGuiID field = ImGui::GetItemID();
-        if (ImGui::IsItemEdited()) s.find_dirty = true;
-        // Enter steps to the next hit, Shift+Enter to the previous. The field
-        // owns the Enter key and validates with key repeat, so a slow frame
-        // (pages rendering) could turn one press into two; asking as the owner
-        // without repeat counts each press once. ConfigInputTextEnterKeepActive
-        // keeps the field active so Enter can be pressed again.
-        const bool pressed_once = ImGui::IsKeyPressed(ImGuiKey_Enter, ImGuiInputFlags_None, field) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, ImGuiInputFlags_None, field);
-        if (entered && pressed_once) find_step(s, ImGui::GetIO().KeyShift ? -1 : 1);
-        ImGui::SameLine();
-        ImGui::AlignTextToFramePadding();
-        if (s.find_text.empty()) ImGui::TextDisabled("Type to search");
-        else if (s.find_progress < s.view.page_count()) ImGui::TextDisabled("%zu found, scanning %d/%d", s.hits.size(), s.find_progress, s.view.page_count());
-        else if (s.hits.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.warning), "No matches");
-        else ImGui::TextDisabled("%d of %zu", s.current_hit + 1, s.hits.size());
-        ImGui::SameLine();
-        if (icon_button(ICON_MD_KEYBOARD_ARROW_UP, "Previous match", !s.hits.empty())) find_step(s, -1);
-        ImGui::SameLine();
-        if (icon_button(ICON_MD_KEYBOARD_ARROW_DOWN, "Next match", !s.hits.empty())) find_step(s, 1);
-        ImGui::SameLine();
-        if (icon_button(ICON_MD_FORMAT_SIZE, "Match case", true, s.find_match_case)) { s.find_match_case = !s.find_match_case; s.find_dirty = true; }
-        ImGui::SameLine();
-        if (icon_button(ICON_MD_CLOSE, "Close find")) close_find(s);
-    }
-    ImGui::EndChild();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
 }
 
 // -------------------------------------------------------------- status bar
@@ -473,7 +472,6 @@ void draw_workspace(Session& s) {
     if (ImGui::Begin("Document", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse)) {
         toolbar(s);
         ImGui::Spacing();
-        find_bar(s);
         const float footer = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 2 + 4 * ui_scale(s);
         const float body = std::max(60.0f, ImGui::GetContentRegionAvail().y - footer);
         if (s.has_document) {

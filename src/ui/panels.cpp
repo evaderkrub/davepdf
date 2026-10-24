@@ -90,7 +90,7 @@ void draw_pages_panel(Session& s) {
     const auto& p = fwPaletteCurrent();
     ImGui::SetNextWindowSizeConstraints(ImVec2(140 * us, 100 * us), ImVec2(FLT_MAX, FLT_MAX));
     if (s.sidebar_focus_frames > 0 && s.sidebar_focus_tab == 0) ImGui::SetNextWindowFocus();
-    if (!ImGui::Begin("Pages", nullptr, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Pages", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysVerticalScrollbar)) { ImGui::End(); return; }
     // Begin returns true only for the visible tab of a dock node, which is
     // exactly the "which sidebar tab is open" fact worth remembering.
     s.sidebar_tab = 0;
@@ -136,7 +136,7 @@ void draw_outline_panel(Session& s) {
     const float us = ui_scale(s);
     ImGui::SetNextWindowSizeConstraints(ImVec2(140 * us, 100 * us), ImVec2(FLT_MAX, FLT_MAX));
     if (s.sidebar_focus_frames > 0 && s.sidebar_focus_tab == 1) ImGui::SetNextWindowFocus();
-    if (!ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysVerticalScrollbar)) { ImGui::End(); return; }
     s.sidebar_tab = 1;
     if (!s.has_document) empty_state(ICON_MD_TOC, "The document outline (bookmarks) appears here.");
     else if (s.outline.empty()) empty_state(ICON_MD_TOC, "This document has no outline.");
@@ -152,7 +152,8 @@ void draw_search_results_panel(Session& s) {
     const auto& p = fwPaletteCurrent();
     ImGui::SetNextWindowSizeConstraints(ImVec2(220 * us, 120 * us), ImVec2(FLT_MAX, FLT_MAX));
     if (s.focus_results) ImGui::SetNextWindowFocus();
-    if (!ImGui::Begin("Search results", &s.show_results, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    // Appearing while the user types must not take the keyboard away from the find box.
+    if (!ImGui::Begin("Search results", &s.show_results, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_NoFocusOnAppearing)) { ImGui::End(); return; }
     if (!s.has_document || s.find_text.empty()) {
         empty_state(ICON_MD_MANAGE_SEARCH, s.has_document ? "Type in the find bar (Ctrl+F) to list every match here." : "Open a document and search it to list matches here.");
         ImGui::End();
@@ -234,7 +235,7 @@ void draw_search_results_panel(Session& s) {
 void draw_properties_panel(Session& s) {
     const float us = ui_scale(s);
     ImGui::SetNextWindowSizeConstraints(ImVec2(220 * us, 120 * us), ImVec2(FLT_MAX, FLT_MAX));
-    if (!ImGui::Begin("Properties", &s.show_properties, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    if (!ImGui::Begin("Properties", &s.show_properties, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysVerticalScrollbar)) { ImGui::End(); return; }
     if (!s.has_document) { empty_state(ICON_MD_INFO_OUTLINE, "Document properties appear here."); ImGui::End(); return; }
     const auto& p = fwPaletteCurrent();
     const DocumentInfo& d = s.info;
