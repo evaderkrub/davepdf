@@ -1,0 +1,17 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    { "name": "windows", "hidden": true, "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" } },
+    { "name": "release", "inherits": "windows", "generator": "Ninja", "binaryDir": "C:/buildfiles/davepdf/release", "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "BUILD_TESTING": "ON" } },
+    { "name": "debug", "inherits": "release", "binaryDir": "C:/buildfiles/davepdf/debug", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" },
+    { "name": "debug", "configurePreset": "debug" }
+  ],
+  "testPresets": [
+    { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+    { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } }
+  ]
+}

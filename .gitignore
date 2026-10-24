@@ -1,0 +1,14 @@
+# Build output lives under C:/buildfiles; nothing generated belongs here.
+build/
+out/
+*.obj
+*.pdb
+*.ilk
+*.user
+.vs/
+.idea/
+imgui.ini
+layout.ini
+settings.txt
+ui-test-results.xml
+*.bmp

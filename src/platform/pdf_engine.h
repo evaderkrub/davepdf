@@ -1,0 +1,52 @@
+#pragma once
+// The one place PDFium is spoken to. Everything comes back as plain app
+// structs (page sizes, pixels, outline, hits) so the rest of the program
+// never includes an fpdf header and could be rebuilt on another engine.
+#include "app/session.h"
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace davepdf::platform {
+
+// Process-wide library state. PDFium is single threaded; so is this wrapper.
+bool pdf_init(std::string& error);
+void pdf_shutdown();
+const char* pdfium_version();
+
+class PdfDocument {
+public:
+    PdfDocument();
+    ~PdfDocument();
+    PdfDocument(const PdfDocument&) = delete;
+    PdfDocument& operator=(const PdfDocument&) = delete;
+
+    // Both loaders keep the file bytes in memory for the document's lifetime,
+    // which sidesteps PDFium's narrow-path file API on Windows.
+    bool load_file(const std::filesystem::path& path, const std::string& password, std::string& error);
+    bool load_memory(std::string bytes, const std::string& password, std::string& error);
+    void close();
+    bool is_open() const;
+    // True after a failed load that would succeed with the right password.
+    bool needs_password() const;
+
+    int page_count() const;
+    std::vector<PageInfo> page_sizes() const;
+    // Renders a page onto white at exactly width x height pixels, rotated by
+    // 0/90/180/270 degrees clockwise. bgra receives width*height*4 bytes.
+    bool render(int page, int width, int height, int rotation, std::vector<unsigned char>& bgra, std::string& error);
+    std::vector<OutlineItem> outline() const;
+    // Fills the metadata fields; path, file_name and bytes are the caller's.
+    DocumentInfo metadata() const;
+    std::vector<LinkBox> links(int page);
+    bool page_text(int page, std::string& utf8, std::string& error);
+    // Appends every occurrence on the page, in reading order.
+    bool search(int page, const std::string& utf8, bool match_case, std::vector<SearchHit>& out);
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+} // namespace davepdf::platform
