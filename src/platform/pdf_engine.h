@@ -5,12 +5,16 @@
 #include "app/session.h"
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 namespace davepdf::platform {
 
-// Process-wide library state. PDFium is single threaded; so is this wrapper.
+// Process-wide library state. PDFium is not thread safe: every call on a
+// document, from any thread, must hold that document's mutex() first. The
+// methods below do not lock themselves so a caller can group several calls
+// (or try_lock and skip a frame when the render thread is busy).
 bool pdf_init(std::string& error);
 void pdf_shutdown();
 const char* pdfium_version();
@@ -21,6 +25,8 @@ public:
     ~PdfDocument();
     PdfDocument(const PdfDocument&) = delete;
     PdfDocument& operator=(const PdfDocument&) = delete;
+
+    std::mutex& mutex() const;
 
     // Both loaders keep the file bytes in memory for the document's lifetime,
     // which sidesteps PDFium's narrow-path file API on Windows.

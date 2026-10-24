@@ -70,7 +70,7 @@ function(make_imgui target)
 endfunction()
 make_imgui(davepdf_imgui)
 
-set(DAVEPDF_DESKTOP_SOURCES src/platform/desktop.cpp src/platform/host_windows.cpp
+set(DAVEPDF_DESKTOP_SOURCES src/platform/desktop.cpp src/platform/host_windows.cpp src/platform/render_worker.cpp
   src/ui/workspace.cpp src/ui/canvas.cpp src/ui/panels.cpp src/ui/dialogs.cpp src/ui/fwTheme.cpp)
 set(DAVEPDF_HOST_LIBRARIES comdlg32 shell32)
 

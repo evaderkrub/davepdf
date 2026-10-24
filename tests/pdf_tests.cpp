@@ -4,7 +4,9 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -123,6 +125,29 @@ int main() {
     }
     CHECK(found_goto && found_uri);
     CHECK(doc.links(1).empty());
+
+    // Two threads sharing the document through its mutex: renders on one,
+    // searches on the other, nothing corrupts and every call completes.
+    {
+        int renders = 0;
+        std::thread renderer([&] {
+            for (int i = 0; i < 12; ++i) {
+                std::vector<unsigned char> px;
+                std::string err;
+                std::lock_guard<std::mutex> lock(doc.mutex());
+                if (doc.render(i % 3, 200, 260, 0, px, err)) ++renders;
+            }
+        });
+        int found = 0;
+        for (int i = 0; i < 12; ++i) {
+            std::vector<SearchHit> h;
+            std::lock_guard<std::mutex> lock(doc.mutex());
+            if (doc.search(i % 3, "sample", false, h)) found += static_cast<int>(h.size());
+        }
+        renderer.join();
+        CHECK(renders == 12);
+        CHECK(found >= 12);
+    }
 
     // Close and reopen from a file path.
     doc.close();

@@ -80,7 +80,7 @@ tests/                console tests and the UI test
 tools/                icon generation scripts
 ```
 
-The drawing code reads the `Session` and never owns state; it calls back into `platform` for anything that needs the engine or the OS. Failures come back as a bool plus a message that the interface shows in a modal. Page images are rendered by PDFium into BGRA buffers, uploaded as SDL textures and cached by page, size and rotation under a memory budget, with a per-frame time budget so large pages render progressively and a stale rendering is stretched while the exact one is produced.
+The drawing code reads the `Session` and never owns state; it calls back into `platform` for anything that needs the engine or the OS. Failures come back as a bool plus a message that the interface shows in a modal. Page images are rendered by PDFium into BGRA buffers on a dedicated render thread (`render_worker.cpp`), uploaded as SDL textures on the frame loop and cached by page, size and rotation under a memory budget. PDFium is not thread safe, so every engine call holds the document's mutex; frame-time lookups (hover, links, search scanning) try the lock and simply retry next frame while a render is in progress. Requests are prioritised by distance from the page being read, a half-size preview is rendered first when nothing cached can stand in, and after a zoom or rotation the exact-size render waits until the size has held still for 120 ms so gestures stretch the cached page instead of rendering every frame. The status bar shows the last render time and the queue depth.
 
 ## Limits and next work
 

@@ -1,6 +1,7 @@
 #include "platform/desktop.h"
 #include "platform/host.h"
 #include "platform/pdf_engine.h"
+#include "platform/render_worker.h"
 #include "app/sample_pdf.h"
 #include "ui/workspace.h"
 #include "ui/fwTheme.h"
@@ -17,6 +18,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <unordered_map>
 #ifdef DAVEPDF_TESTING
@@ -39,8 +42,8 @@ std::string utf8(const std::filesystem::path& path) {
 }
 std::filesystem::path from_utf8(const std::string& text) { return std::filesystem::path(std::u8string(text.begin(), text.end())); }
 
-// Rendered pages, keyed by size and rotation. Budgeted per frame so a stack
-// of large pages renders progressively instead of stalling the interface.
+// Rendered pages, keyed by size and rotation. Rendering happens on the
+// RenderWorker thread; the frame loop only uploads finished pixels.
 struct CacheEntry {
     SDL_Texture* texture = nullptr;
     int page = 0, width = 0, height = 0, rotation = 0;
@@ -50,17 +53,26 @@ struct CacheEntry {
 };
 constexpr size_t kCacheBudget = 640ull * 1024 * 1024;
 constexpr int kMaxTexture = 8192;
-constexpr double kFrameRenderBudgetMs = 12.0;
+// How long a zoom or rotation must hold still before pages re-render at the
+// new size. Shorter feels laggy under continuous wheel input; longer leaves
+// the stretched preview on screen noticeably.
+constexpr double kSettleSeconds = 0.12;
+// Texture uploads per frame are capped so a burst of finished renders cannot
+// stall a frame the way rendering used to.
+constexpr size_t kUploadBudgetBytes = 48ull * 1024 * 1024;
+// Pages wider than this get a quick half-size pass first when nothing cached
+// can stand in for them.
+constexpr int kPreviewThreshold = 600;
 
 struct App {
     Session session;
     PdfDocument doc;
+    std::unique_ptr<RenderWorker> worker;
     std::vector<CacheEntry> cache;
+    std::vector<RenderResult> inbox;   // finished renders awaiting upload
     size_t cache_bytes = 0;
     std::unordered_map<int, std::vector<LinkBox>> links;
     unsigned long long frame_index = 0;
-    double frame_render_ms = 0;
-    int frame_renders = 0;
     bool frame_pending = false;
     int find_start_page = 0;
 
@@ -82,6 +94,7 @@ struct App {
     int shutdown();
     void clear_cache();
     void evict();
+    void upload_results();
     void find_pump();
     void open_path(const std::filesystem::path& path);
     void open_bytes(std::string bytes, const std::filesystem::path& path, const std::string& label);
@@ -123,10 +136,42 @@ bool load_fonts(const std::filesystem::path& base) {
 }
 
 void App::clear_cache() {
+    if (worker) worker->cancel_all();
+    inbox.clear();
     for (auto& entry : cache) SDL_DestroyTexture(entry.texture);
     cache.clear();
     cache_bytes = 0;
     links.clear();
+}
+
+void App::upload_results() {
+    if (worker) {
+        auto fresh = worker->collect();
+        for (auto& r : fresh) inbox.push_back(std::move(r));
+    }
+    size_t uploaded = 0;
+    while (!inbox.empty() && uploaded < kUploadBudgetBytes) {
+        RenderResult r = std::move(inbox.front());
+        inbox.erase(inbox.begin());
+        const RenderJob& j = r.job;
+        // A render that outlived its document, rotation or night-mode setting is dropped.
+        if (j.generation != session.render_generation || j.rotation != session.view.rotation || j.invert != session.invert_pages) continue;
+        session.last_render_ms = static_cast<float>(r.milliseconds);
+        SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, j.width, j.height);
+        if (!texture) continue;
+        SDL_UpdateTexture(texture, nullptr, r.bgra.data(), j.width * 4);
+        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+        uploaded += r.bgra.size();
+        // Replace an identical entry rather than keeping two.
+        for (size_t i = 0; i < cache.size(); ++i) {
+            const auto& e = cache[i];
+            if (e.page == j.page && e.width == j.width && e.height == j.height && e.rotation == j.rotation && e.generation == j.generation) {
+                SDL_DestroyTexture(e.texture); cache_bytes -= e.bytes; cache[i] = cache.back(); cache.pop_back(); break;
+            }
+        }
+        cache.push_back({texture, j.page, j.width, j.height, j.rotation, j.generation, frame_index, r.bgra.size()});
+        cache_bytes += r.bgra.size();
+    }
 }
 
 void App::evict() {
@@ -154,6 +199,9 @@ void App::open_bytes(std::string bytes, const std::filesystem::path& path, const
     Session& s = session;
     std::string error;
     const auto size = bytes.size();
+    if (worker) worker->cancel_all();
+    // Waits for a render in flight to finish before the document changes under it.
+    std::lock_guard<std::mutex> lock(doc.mutex());
     if (!doc.load_memory(std::move(bytes), s.password, error)) {
         if (doc.needs_password()) {
             // Keep the path so the password dialog can retry the same file.
@@ -233,14 +281,17 @@ void App::find_pump() {
     };
     // Scanning starts at the page being read, so the first result is the one
     // a reader expects, and continues a few milliseconds per frame.
+    // A render in progress owns the engine; scanning simply resumes next frame.
+    std::unique_lock<std::mutex> lock(doc.mutex(), std::try_to_lock);
     const auto started = Clock::now();
-    while (s.find_progress < count && std::chrono::duration<double, std::milli>(Clock::now() - started).count() < 4.0) {
+    while (lock.owns_lock() && s.find_progress < count && std::chrono::duration<double, std::milli>(Clock::now() - started).count() < 4.0) {
         const int page = (find_start_page + s.find_progress) % count;
         const size_t before = s.hits.size();
         doc.search(page, s.find_text, s.find_match_case, s.hits);
         ++s.find_progress;
         if (s.current_hit < 0 && s.hits.size() > before) { s.current_hit = static_cast<int>(before); jump(s.hits[before]); }
     }
+    if (lock.owns_lock()) lock.unlock();
     if (s.find_step_requested) {
         s.find_step_requested = false;
         if (!s.hits.empty()) {
@@ -271,6 +322,7 @@ bool App::init(int argc, char** argv) {
     const auto base = executable_directory();
     std::string error;
     if (!pdf_init(error)) { std::fprintf(stderr, "%s\n", error.c_str()); return false; }
+    worker = std::make_unique<RenderWorker>(doc);
     settings_dir = host::settings_directory();
     if (!testing) {
         std::ifstream file(settings_dir / "settings.txt");
@@ -376,9 +428,9 @@ bool App::frame() {
         if (event.type == SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED) session.dpi = SDL_GetWindowDisplayScale(main_window);
     }
     ++frame_index;
-    frame_render_ms = 0;
-    frame_renders = 0;
     frame_pending = false;
+    upload_results();
+    if (session.selection_dirty && !session.selection.empty()) set_selection(session, session.selection.page, session.selection.anchor, session.selection.focus);
     fwPumpAppearance(session.scale, session.dpi);
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -400,6 +452,11 @@ bool App::frame() {
     SDL_RenderPresent(renderer);
     find_pump();
     evict();
+    if (worker) {
+        worker->prune(frame_index, session.render_generation, session.view.rotation);
+        session.render_queue = static_cast<int>(worker->pending());
+        if (session.render_queue > 0 || !inbox.empty()) frame_pending = true;
+    }
     const std::string title = session.has_document ? session.info.file_name + " - davepdf" : "davepdf";
     SDL_SetWindowTitle(main_window, title.c_str());
     ++frames;
@@ -427,6 +484,7 @@ int App::shutdown() {
 #endif
     persist(true);
     clear_cache();
+    worker.reset();  // joins the render thread before the document goes away
     doc.close();
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
@@ -466,8 +524,11 @@ void request_action(Session& s, Action action, const std::string& path) {
 
 void close_document(Session& s) {
     App& app = *g_app;
-    app.doc.close();
     app.clear_cache();
+    {
+        std::lock_guard<std::mutex> lock(app.doc.mutex());
+        app.doc.close();
+    }
     s.has_document = false;
     s.view.pages.clear();
     s.view.current_page = 0;
@@ -482,9 +543,9 @@ void close_document(Session& s) {
     ++s.render_generation;
 }
 
-PageImage page_image(Session& s, int page, int width, int height) {
+PageImage page_image(Session& s, int page, int width, int height, bool thumbnail) {
     App& app = *g_app;
-    if (!app.doc.is_open() || !s.view.valid_page(page) || width < 1 || height < 1) return {};
+    if (!s.has_document || !app.worker || !s.view.valid_page(page) || width < 1 || height < 1) return {};
     width = std::min(width, kMaxTexture);
     height = std::min(height, kMaxTexture);
     for (auto& e : app.cache) {
@@ -493,36 +554,32 @@ PageImage page_image(Session& s, int page, int width, int height) {
             return {reinterpret_cast<unsigned long long>(e.texture), width, height, true};
         }
     }
-    // At least one render per frame guarantees progress; the time budget keeps
-    // the interface responsive while a zoomed-in stack catches up.
-    if (app.frame_renders == 0 || app.frame_render_ms < kFrameRenderBudgetMs) {
-        const auto started = Clock::now();
-        std::vector<unsigned char> pixels;
-        std::string error;
-        ++app.frame_renders;
-        if (app.doc.render(page, width, height, s.view.rotation, pixels, error)) {
-            if (s.invert_pages) {
-                // Night reading: invert colour, keep alpha. Done on the CPU
-                // once per rendering; the cache then holds the inverted page.
-                for (size_t i = 0; i + 3 < pixels.size(); i += 4) { pixels[i] = static_cast<unsigned char>(255 - pixels[i]); pixels[i + 1] = static_cast<unsigned char>(255 - pixels[i + 1]); pixels[i + 2] = static_cast<unsigned char>(255 - pixels[i + 2]); }
-            }
-            SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, width, height);
-            if (texture) {
-                SDL_UpdateTexture(texture, nullptr, pixels.data(), width * 4);
-                SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
-                app.cache.push_back({texture, page, width, height, s.view.rotation, s.render_generation, app.frame_index, pixels.size()});
-                app.cache_bytes += pixels.size();
-                app.frame_render_ms += std::chrono::duration<double, std::milli>(Clock::now() - started).count();
-                return {reinterpret_cast<unsigned long long>(texture), width, height, true};
-            }
+    // The nearest rendering of the same page stands in while the exact size is produced.
+    CacheEntry* best = nullptr;
+    for (auto& e : app.cache)
+        if (e.page == page && e.rotation == s.view.rotation && e.generation == s.render_generation && (!best || std::abs(e.width - width) < std::abs(best->width - width))) best = &e;
+    const bool settling = ImGui::GetTime() - s.view_changed_at < kSettleSeconds;
+    if (!(settling && best)) {
+        // Pages near the one being read come first; thumbnails after all of them.
+        const int distance = std::abs(page - s.view.current_page);
+        RenderJob job;
+        job.page = page; job.width = width; job.height = height; job.rotation = s.view.rotation;
+        job.generation = s.render_generation; job.invert = s.invert_pages;
+        job.priority = (thumbnail ? 100 : 0) + distance;
+        job.requested = app.frame_index;
+        if (!best && !thumbnail && width > kPreviewThreshold) {
+            // Nothing to show yet: a half-size pass lands in a quarter of the time.
+            RenderJob preview = job;
+            preview.width = std::max(1, width / 2);
+            preview.height = std::max(1, height / 2);
+            preview.priority -= 1;
+            app.worker->submit(preview);
         }
+        app.worker->submit(job);
     }
     app.frame_pending = true;
-    const CacheEntry* best = nullptr;
-    for (const auto& e : app.cache)
-        if (e.page == page && e.rotation == s.view.rotation && e.generation == s.render_generation && (!best || std::abs(e.width - width) < std::abs(best->width - width))) best = &e;
     if (!best) return {};
-    const_cast<CacheEntry*>(best)->last_used = app.frame_index;
+    best->last_used = app.frame_index;
     return {reinterpret_cast<unsigned long long>(best->texture), best->width, best->height, false};
 }
 
@@ -531,9 +588,13 @@ bool page_image_pending() { return g_app && g_app->frame_pending; }
 const std::vector<LinkBox>& page_links(Session& s, int page) {
     static const std::vector<LinkBox> none;
     App& app = *g_app;
-    if (!app.doc.is_open() || !s.view.valid_page(page)) return none;
+    if (!s.has_document || !s.view.valid_page(page)) return none;
     auto it = app.links.find(page);
-    if (it == app.links.end()) it = app.links.emplace(page, app.doc.links(page)).first;
+    if (it == app.links.end()) {
+        std::unique_lock<std::mutex> lock(app.doc.mutex(), std::try_to_lock);
+        if (!lock.owns_lock() || !app.doc.is_open()) return none;  // not cached: asked again next frame
+        it = app.links.emplace(page, app.doc.links(page)).first;
+    }
     return it->second;
 }
 
@@ -547,6 +608,7 @@ void activate_link(Session& s, const LinkBox& link) {
 void copy_page_text(Session& s, int page) {
     App& app = *g_app;
     std::string text, error;
+    std::lock_guard<std::mutex> lock(app.doc.mutex());
     if (!app.doc.is_open() || !app.doc.page_text(page, text, error)) { s.error = error.empty() ? "No document is open." : error; return; }
     if (text.empty()) { s.status = "Page " + std::to_string(page + 1) + " has no text layer"; return; }
     if (!SDL_SetClipboardText(text.c_str())) { s.error = SDL_GetError(); return; }
@@ -555,24 +617,34 @@ void copy_page_text(Session& s, int page) {
 
 int text_index_at(Session& s, int page, float nx, float ny) {
     App& app = *g_app;
-    if (!app.doc.is_open() || !s.view.valid_page(page)) return -1;
+    if (!s.has_document || !s.view.valid_page(page)) return -1;
+    std::unique_lock<std::mutex> lock(app.doc.mutex(), std::try_to_lock);
+    if (!lock.owns_lock() || !app.doc.is_open()) return -1;  // hover simply re-asks next frame
     return app.doc.char_index_at(page, nx, ny);
 }
 
 void set_selection(Session& s, int page, int anchor, int focus) {
     App& app = *g_app;
-    if (!app.doc.is_open() || !s.view.valid_page(page) || anchor < 0 || focus < 0) { s.selection.clear(); return; }
-    const bool same = s.selection.page == page && s.selection.anchor == anchor && s.selection.focus == focus;
+    if (!s.has_document || !s.view.valid_page(page) || anchor < 0 || focus < 0) { s.selection.clear(); s.selection_dirty = false; return; }
+    const bool same = s.selection.page == page && s.selection.anchor == anchor && s.selection.focus == focus && !s.selection_dirty;
     s.selection.page = page;
     s.selection.anchor = anchor;
     s.selection.focus = focus;
-    if (!same) s.selection.rects = app.doc.text_rects(page, s.selection.first(), s.selection.count());
+    if (same) return;
+    std::unique_lock<std::mutex> lock(app.doc.mutex(), std::try_to_lock);
+    if (!lock.owns_lock() || !app.doc.is_open()) { s.selection_dirty = true; return; }  // boxes follow next frame
+    s.selection.rects = app.doc.text_rects(page, s.selection.first(), s.selection.count());
+    s.selection_dirty = false;
 }
 
 void copy_selection_or_page(Session& s) {
     App& app = *g_app;
     if (s.selection.empty()) { copy_page_text(s, s.view.current_page); return; }
-    const std::string text = app.doc.text_range(s.selection.page, s.selection.first(), s.selection.count());
+    std::string text;
+    {
+        std::lock_guard<std::mutex> lock(app.doc.mutex());
+        text = app.doc.text_range(s.selection.page, s.selection.first(), s.selection.count());
+    }
     if (text.empty()) { s.status = "The selection has no text"; return; }
     if (!SDL_SetClipboardText(text.c_str())) { s.error = SDL_GetError(); return; }
     s.status = "Copied " + std::to_string(s.selection.count()) + (s.selection.count() == 1 ? " character" : " characters");

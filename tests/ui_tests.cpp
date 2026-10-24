@@ -26,10 +26,15 @@ void capture_davepdf_test_frame(SDL_Renderer* renderer) {
     SDL_DestroySurface(surface);
     screenshot_request.clear();
 }
+// Rendering is asynchronous; tests that look at pixels wait for the worker.
+static void wait_for_renders(ImGuiTestContext* ctx, Session& s) {
+    for (int i = 0; i < 300 && (s.render_queue > 0 || platform::page_image_pending()); ++i) ctx->Yield();
+}
 // Screenshots are optional: set DAVEPDF_TEST_SCREENSHOTS to a folder to get them.
 static void capture_frame(ImGuiTestContext* ctx, const char* name) {
     const char* folder = std::getenv("DAVEPDF_TEST_SCREENSHOTS");
     if (!folder) return;
+    wait_for_renders(ctx, *static_cast<Session*>(ctx->Test->UserData));
     std::filesystem::create_directories(folder);
     screenshot_request = (std::filesystem::path(folder) / (std::string(name) + ".bmp")).string();
     screenshot_saved = false;
@@ -84,7 +89,10 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         open_sample(ctx, s);
         IM_CHECK_EQ(s.view.current_page, 0);
         IM_CHECK(s.info.title == kSampleTitle);
-        ctx->Yield(6);  // let the first pages render
+        // The render worker produces the first page and reports its timing.
+        wait_for_renders(ctx, s);
+        IM_CHECK(s.last_render_ms > 0.0f);
+        IM_CHECK_EQ(s.render_queue, 0);
         capture_frame(ctx, "document");
         ctx->SetRef("Document");
         ctx->ItemClick("**/Next page");

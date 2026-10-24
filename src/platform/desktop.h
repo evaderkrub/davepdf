@@ -22,7 +22,7 @@ struct PageImage {
     int width = 0, height = 0;
     bool exact = false;
 };
-PageImage page_image(Session& session, int page, int width, int height);
+PageImage page_image(Session& session, int page, int width, int height, bool thumbnail = false);
 bool page_image_pending();  // true while any requested size is still queued
 
 const std::vector<LinkBox>& page_links(Session& session, int page);

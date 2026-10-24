@@ -129,6 +129,7 @@ const char* pdfium_version() {
 }
 
 struct PdfDocument::Impl {
+    mutable std::mutex mutex;
     std::string bytes;
     FPDF_DOCUMENT doc = nullptr;
     bool needs_password = false;
@@ -166,6 +167,7 @@ struct PdfDocument::Impl {
 };
 
 PdfDocument::PdfDocument() : impl_(std::make_unique<Impl>()) {}
+std::mutex& PdfDocument::mutex() const { return impl_->mutex; }
 PdfDocument::~PdfDocument() { close(); }
 
 bool PdfDocument::load_file(const std::filesystem::path& path, const std::string& password, std::string& error) {

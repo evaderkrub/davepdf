@@ -117,7 +117,7 @@ void draw_pages_panel(Session& s) {
             const bool hovered = ImGui::IsItemHovered();
             if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
             if (current || hovered) dl->AddRectFilled(ImVec2(top.x - 5 * us, top.y - 5 * us), ImVec2(top.x + thumb_w + 5 * us, top.y + thumb_h + label_h + 2 * us), current ? p.accentFill : p.surfaceHovered, 6 * us);
-            const platform::PageImage image = platform::page_image(s, page, static_cast<int>(thumb_w), static_cast<int>(thumb_h));
+            const platform::PageImage image = platform::page_image(s, page, static_cast<int>(thumb_w), static_cast<int>(thumb_h), true);
             const ImVec2 a = top, b(top.x + thumb_w, top.y + thumb_h);
             dl->AddRectFilled(ImVec2(a.x + 2 * us, a.y + 3 * us), ImVec2(b.x + 2 * us, b.y + 3 * us), IM_COL32(0, 0, 0, 40), 2 * us);
             if (image.texture) dl->AddImage(ImTextureRef(static_cast<ImTextureID>(image.texture)), a, b);

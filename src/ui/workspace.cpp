@@ -261,6 +261,13 @@ void status_bar(Session& s) {
         ImGui::Text("%s  %s", zoom_label(s).c_str(), fit);
         if (s.view.rotation) { ImGui::SameLine(0, 18 * us); ImGui::Text(ICON_MD_ROTATE_RIGHT " %d" "\xC2\xB0", s.view.rotation); }
         if (!s.selection.empty()) { ImGui::SameLine(0, 18 * us); ImGui::Text("%d selected", s.selection.count()); }
+        if (s.last_render_ms > 0) {
+            ImGui::SameLine(0, 18 * us);
+            ImGui::PushStyleColor(ImGuiCol_Text, p.textFaint);
+            if (s.render_queue > 0) ImGui::Text("render %.0f ms, %d queued", static_cast<double>(s.last_render_ms), s.render_queue);
+            else ImGui::Text("render %.0f ms", static_cast<double>(s.last_render_ms));
+            ImGui::PopStyleColor();
+        }
         ImGui::SameLine(0, 18 * us);
         ImGui::TextUnformatted(s.info.file_name.c_str());
     } else {

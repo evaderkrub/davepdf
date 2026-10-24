@@ -97,6 +97,9 @@ void draw_canvas(Session& s) {
         scroll_y = scroll_after_zoom(scroll_y, view_size.y / 2, memory.last_zoom, s.view.zoom);
         scroll_x = scroll_after_zoom(scroll_x, view_size.x / 2, memory.last_zoom, s.view.zoom);
     }
+    // Renders wait until the size has settled, so a zoom gesture or a window
+    // resize stretches the cached page instead of rendering every frame.
+    if ((zoom_changed || memory.last_rotation != s.view.rotation) && memory.last_generation == s.render_generation) s.view_changed_at = ImGui::GetTime();
     memory.last_zoom = s.view.zoom;
     memory.last_rotation = s.view.rotation;
     memory.last_generation = s.render_generation;
@@ -128,6 +131,7 @@ void draw_canvas(Session& s) {
                 scroll_y = scroll_after_zoom(scroll_y, mouse_rel.y, old_zoom, new_zoom);
                 scroll_x = scroll_after_zoom(scroll_x, mouse_rel.x, old_zoom, new_zoom);
                 memory.last_zoom = new_zoom;
+                s.view_changed_at = ImGui::GetTime();
             }
         } else if (io.KeyShift) {
             scroll_x -= io.MouseWheel * 90 * us;

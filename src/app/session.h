@@ -86,6 +86,12 @@ struct Session {
 
     TextSelection selection;
     bool selecting = false;          // a selection drag is in progress
+    bool selection_dirty = false;    // boxes still to compute (engine was busy)
+
+    // Render pacing and telemetry, written by the platform layer.
+    double view_changed_at = 0;      // interface time of the last zoom or rotation change
+    float last_render_ms = 0;        // duration of the most recent page render
+    int render_queue = 0;            // renders waiting or in flight
 
     // Night reading: page pixels are inverted at upload, chrome is untouched.
     bool invert_pages = false;
