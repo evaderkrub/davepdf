@@ -23,8 +23,9 @@ Command line: `davepdf.exe file.pdf` opens a document, `davepdf.exe --sample` op
 - **Search**: Ctrl+F opens a find bar. Results are gathered a few milliseconds per frame starting at the page being read, every hit is highlighted on the page, the current one in the accent colour, and Enter / Shift+Enter / F3 / Shift+F3 step through them. Match case is optional.
 - **Navigation aids**: a **Pages** panel with live thumbnails, an **Outline** panel for the document's bookmarks, and link annotations on the page: internal links jump to their page, web and mail links open in the default browser (other URI schemes are refused).
 - **Properties**: page count, file size, PDF version, encryption, the current page size in points, millimetres and inches, and the document metadata.
-- **Copy page text**: Ctrl+C or **Edit > Copy page text** puts the text layer of the current page on the clipboard.
-- **Appearance**: eight fwcom token themes (dark and light), 75% to 200% GUI scaling independent of monitor DPI, a dockable layout with **View > Reset layout**, and a modal About box.
+- **Text selection**: drag across text to select it (the pointer becomes an I-beam over text; dragging elsewhere pans). Ctrl+C copies the selection, or the whole page's text layer when nothing is selected. Escape clears the selection.
+- **Night reading**: **View > Invert page colours** (Ctrl+Shift+N) inverts the page pixels while the interface keeps its theme.
+- **Appearance**: eight fwcom token themes (dark and light), 75% to 200% GUI scaling independent of monitor DPI, a dockable layout with **View > Reset layout**, and a modal About box. Theme, scale, sidebar, fit mode, night mode and recent files persist between runs.
 
 ### Keyboard
 
@@ -40,7 +41,9 @@ Command line: `davepdf.exe file.pdf` opens a document, `davepdf.exe --sample` op
 | Ctrl+1 / Ctrl+2 / Ctrl+0 | Actual size / fit width / fit page |
 | Ctrl+R / Ctrl+Shift+R | Rotate clockwise / counter-clockwise |
 | Ctrl+B / Ctrl+I | Toggle sidebar / properties |
-| Ctrl+C | Copy the text of the current page |
+| Ctrl+C | Copy the selection, or the whole page's text |
+| Ctrl+Shift+N | Invert page colours |
+| Escape | Clear the selection, or close the find bar |
 | F1 | Keyboard shortcut reference |
 
 ## Build and test
@@ -61,8 +64,8 @@ The script finds Visual Studio with `vswhere`, enters its x64 environment, then 
 `ctest` runs three programs, all from `C:\buildfiles` rather than the executable's folder so that asset and DLL lookup is proven independent of the working directory:
 
 - `davepdf_app_tests`: the window-free logic in `src/app` (zoom presets, page layout, fit calculations, current-page tracking, scroll anchoring under zoom, rotation of normalised boxes, settings round trip, recent files, and the generated sample PDF's cross-reference table).
-- `davepdf_pdf_tests`: the PDFium wrapper against the sample document (rejecting garbage, page sizes, rendering pixels at two rotations, metadata, outline, text extraction, case-sensitive and insensitive search with normalised boxes, link annotations, file loading).
-- `davepdf_ui_tests --test`: the real SDL/ImGui application driven by ImGui Test Engine. It opens a window for a couple of seconds and covers the welcome screen, opening the sample, toolbar and keyboard navigation, zoom presets and fit modes, Ctrl+wheel zoom, rotation, the find bar with stepping and match case, the outline and thumbnail panels, clicking a link through the real canvas geometry, drag panning, GUI scale, themes, the properties panel, the modal About box, the go-to-page dialog, opening files from disk, the error modal and the recent-files menu. Set `DAVEPDF_TEST_SCREENSHOTS` to a folder to get BMP captures of key states. Results are written to `ui-test-results.xml` beside the test binary.
+- `davepdf_pdf_tests`: the PDFium wrapper against the sample document (rejecting garbage, page sizes, rendering pixels at two rotations, metadata, outline, text extraction, case-sensitive and insensitive search with normalised boxes, character hit testing and text ranges for selection, link annotations, file loading).
+- `davepdf_ui_tests --test`: the real SDL/ImGui application driven by ImGui Test Engine. It opens a window for a couple of seconds and covers the welcome screen, opening the sample, toolbar and keyboard navigation, zoom presets and fit modes, Ctrl+wheel zoom, rotation, the find bar with stepping and match case, the outline and thumbnail panels, clicking a link through the real canvas geometry, drag panning, mouse text selection with clipboard verification, night mode, GUI scale, themes, the properties panel, the modal About box, the go-to-page dialog, opening files from disk, the error modal and the recent-files menu. Set `DAVEPDF_TEST_SCREENSHOTS` to a folder to get BMP captures of key states. Results are written to `ui-test-results.xml` beside the test binary.
 
 ## Source layout
 
@@ -81,6 +84,6 @@ The drawing code reads the `Session` and never owns state; it calls back into `p
 
 ## Limits and next work
 
-PDFium is used as a prebuilt DLL because building it from source needs Chromium's depot_tools; it is the only file beside the executable and the assets. Text selection with the mouse, annotations, form filling, printing and a two-page spread are not implemented yet. Very large zoom levels are capped at 8192 pixel textures per page. Only Windows x64 is built; the code has no other Windows-only dependency than the file dialog, icon and settings folder in `host_windows.cpp`.
+PDFium is used as a prebuilt DLL because building it from source needs Chromium's depot_tools; it is the only file beside the executable and the assets. Selection is limited to one page at a time. Annotations, form filling, printing and a two-page spread are not implemented yet. Very large zoom levels are capped at 8192 pixel textures per page. Only Windows x64 is built; the code has no other Windows-only dependency than the file dialog, icon and settings folder in `host_windows.cpp`.
 
 Third-party licenses: `assets/licenses` (SDL, Dear ImGui, ImGui Test Engine, Open Sans, Material Icons, PDFium and its bundled libraries).
