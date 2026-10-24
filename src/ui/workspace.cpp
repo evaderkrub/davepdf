@@ -188,9 +188,20 @@ void toolbar(Session& s) {
     if (icon_button(ICON_MD_ROTATE_LEFT, "Rotate left", doc)) rotate_view(s, -1);
     ImGui::SameLine();
     if (icon_button(ICON_MD_ROTATE_RIGHT, "Rotate right", doc)) rotate_view(s, 1);
-    toolbar_divider();
     // The find box lives on the toolbar: type and the search starts, no
     // separate bar to open first. Ctrl+F only moves the keyboard focus here.
+    // It takes whatever width is left after the right-hand group; when even a
+    // short box would not fit, the whole find group wraps to a second row.
+    const float frame = ImGui::GetFrameHeight();
+    const float right_group = frame * 3 + 8 * us;
+    const float find_fixed = frame * 4 + ImGui::CalcTextSize(ICON_MD_SEARCH).x + 90 * us;  // icon, count, four buttons
+    const float find_min = 110 * us;
+    {
+        ImGui::SameLine(0, 8);  // measure from where the group would start, not from the line start
+        const float room = ImGui::GetWindowContentRegionMax().x - ImGui::GetCursorPosX() - 24 * us - right_group - find_fixed;
+        if (room >= find_min) toolbar_divider();
+        else ImGui::NewLine();
+    }
     {
         const auto& p = fwPaletteCurrent();
         ImGui::BeginDisabled(!doc);
@@ -201,8 +212,8 @@ void toolbar(Session& s) {
         // being focused in the same frame would otherwise steal it back.
         if (s.focus_find) { s.focus_find = false; s.focus_find_frames = 3; }
         if (s.focus_find_frames > 0) { ImGui::SetKeyboardFocusHere(); --s.focus_find_frames; }
-        const float right_reserve = ImGui::GetFrameHeight() * 7 + 120 * us;
-        ImGui::SetNextItemWidth(std::clamp(ImGui::GetContentRegionAvail().x - right_reserve, 120 * us, 240 * us));
+        const float room = ImGui::GetWindowContentRegionMax().x - ImGui::GetCursorPosX() - right_group - 12 * us - find_fixed;
+        ImGui::SetNextItemWidth(std::clamp(room, find_min, 320 * us));
         const bool entered = ImGui::InputTextWithHint("###FindText", "Find in document", &s.find_text, ImGuiInputTextFlags_EnterReturnsTrue);
         const ImGuiID field = ImGui::GetItemID();
         if (ImGui::IsItemEdited()) {
@@ -234,8 +245,7 @@ void toolbar(Session& s) {
         if (icon_button(ICON_MD_CLOSE, "Close find", !s.find_text.empty() || s.show_results)) close_find(s);
         ImGui::EndDisabled();
     }
-    // Right-aligned group.
-    const float right_group = ImGui::GetFrameHeight() * 3 + 8 * us;
+    // Right-aligned group, on whichever row the find group ended up on.
     ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - right_group));
     if (icon_button(ICON_MD_CONTENT_COPY, "Copy", doc)) platform::copy_selection_or_page(s);
     ImGui::SameLine();
