@@ -24,6 +24,10 @@ struct SearchHit {
     int page = 0;
     int start = 0, count = 0;  // character range on the page
     std::vector<RectF> rects;  // normalised to the unrotated page
+    // Context for the results list: the words before, the match itself as
+    // it appears on the page, and the words after. Kept as three strings so
+    // the match can be coloured without byte-offset arithmetic over UTF-8.
+    std::string before, match, after;
 };
 
 // A run of characters on one page, chosen with the mouse.
@@ -76,6 +80,9 @@ struct Session {
     int current_hit = -1;
     bool find_step_requested = false;  // next/previous requested from the interface
     int find_step_direction = 1;
+    int find_select_hit = -1;          // a hit chosen from the results list
+    bool show_results = false;         // the Search results panel
+    bool focus_results = false;        // bring its tab to the front this frame
 
     TextSelection selection;
     bool selecting = false;          // a selection drag is in progress

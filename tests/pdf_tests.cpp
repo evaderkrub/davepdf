@@ -94,6 +94,9 @@ int main() {
         const SearchHit& title = hits[0];
         CHECK(title.count == 14);
         CHECK(doc.text_range(0, title.start, title.count) == "davepdf sample");
+        CHECK(title.match == "davepdf sample");
+        CHECK(title.after.find("document") != std::string::npos);
+        CHECK(title.before.empty());  // the title is the first text on the page
         const RectF& r = title.rects[0];
         const int under = doc.char_index_at(0, r.x + r.w * 0.5f, r.y + r.h * 0.5f);
         CHECK(under >= title.start && under < title.start + title.count);

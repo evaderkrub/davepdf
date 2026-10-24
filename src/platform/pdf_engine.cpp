@@ -381,7 +381,24 @@ bool PdfDocument::search(int index, const std::string& needle, bool match_case, 
             double left = 0, top = 0, right = 0, bottom = 0;
             if (FPDFText_GetRect(text, i, &left, &top, &right, &bottom)) hit.rects.push_back(normalize(page, left, top, right, bottom));
         }
-        if (!hit.rects.empty()) out.push_back(std::move(hit));
+        if (!hit.rects.empty()) {
+            // Up to 40 characters either side, flattened to one line, so the
+            // results list can show the match in its sentence.
+            const auto grab = [&](int from, int n) {
+                if (n <= 0) return std::string();
+                std::vector<unsigned short> buffer(static_cast<size_t>(n) + 1, 0);
+                const int written = FPDFText_GetText(text, from, n, buffer.data());
+                std::string s = utf16_to_utf8(buffer.data(), written > 0 ? static_cast<size_t>(written) : 0);
+                for (char& c : s) if (c == '\r' || c == '\n' || c == '\t') c = ' ';
+                return s;
+            };
+            const int total = FPDFText_CountChars(text);
+            const int lead = std::min(40, start);
+            hit.before = grab(start - lead, lead);
+            hit.match = grab(start, count);
+            hit.after = grab(start + count, std::min(40, std::max(0, total - start - count)));
+            out.push_back(std::move(hit));
+        }
     }
     FPDFText_FindClose(handle);
     return true;

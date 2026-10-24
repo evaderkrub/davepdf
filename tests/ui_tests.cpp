@@ -44,7 +44,7 @@ static void reset_session(Session& s) {
     s.scale = 1.0f;
     s.theme = 0;
     fwRequestTheme(0);
-    s.show_find = false; s.find_text.clear(); s.find_match_case = false; s.find_dirty = true;
+    s.show_find = false; s.show_results = false; s.find_text.clear(); s.find_match_case = false; s.find_dirty = true;
     s.show_about = s.show_goto = s.show_password = s.show_shortcuts = false;
     s.show_properties = false;
     s.show_sidebar = true;
@@ -226,9 +226,24 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         ctx->ItemClick("**/Match case");
         wait_for_search(ctx, s);
         IM_CHECK(s.hits.size() == 4);  // the title on every page plus "by davepdf itself" on page 1
+        // The results panel lists every hit; clicking one jumps to it.
+        IM_CHECK(s.show_results);
+        ImGuiWindow* results = ImGui::FindWindowByName("Search results");
+        IM_CHECK(results != nullptr && results->WasActive);
+        ctx->WindowFocus("//Search results");
+        ctx->SetRef("Search results");
+        IM_CHECK(ctx->ItemExists("###hit0") && ctx->ItemExists("###hit3"));
+        IM_CHECK(!s.hits[2].match.empty());
+        ctx->ItemClick("###hit2");
+        ctx->Yield(4);
+        IM_CHECK_EQ(s.current_hit, 2);
+        IM_CHECK_EQ(s.view.current_page, s.hits[2].page);
+        capture_frame(ctx, "results");
+        ctx->SetRef("Document");
         ctx->ItemClick("**/Close find");
         ctx->Yield(3);
         IM_CHECK(!s.show_find);
+        IM_CHECK(!s.show_results);
         IM_CHECK(s.find_text.empty());
     };
 

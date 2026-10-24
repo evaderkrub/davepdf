@@ -249,6 +249,10 @@ void App::find_pump() {
             jump(s.hits[static_cast<size_t>(s.current_hit)]);
         }
     }
+    if (s.find_select_hit >= 0) {
+        if (s.find_select_hit < static_cast<int>(s.hits.size())) { s.current_hit = s.find_select_hit; jump(s.hits[static_cast<size_t>(s.current_hit)]); }
+        s.find_select_hit = -1;
+    }
 }
 
 bool App::init(int argc, char** argv) {

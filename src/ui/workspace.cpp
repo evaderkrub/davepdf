@@ -76,6 +76,7 @@ void menu(Session& s) {
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem(menu_label(ICON_MD_VERTICAL_SPLIT, "Sidebar").c_str(), "Ctrl+B", &s.show_sidebar);
         ImGui::MenuItem(menu_label(ICON_MD_INFO_OUTLINE, "Properties").c_str(), "Ctrl+I", &s.show_properties);
+        if (ImGui::MenuItem(menu_label(ICON_MD_MANAGE_SEARCH, "Search results").c_str(), nullptr, s.show_results, s.has_document)) { s.show_results = !s.show_results; if (s.show_results) s.focus_results = true; }
         ImGui::Separator();
         if (ImGui::MenuItem(menu_label(ICON_MD_ZOOM_IN, "Zoom in").c_str(), "Ctrl++", false, s.has_document)) zoom_step_view(s, true);
         if (ImGui::MenuItem(menu_label(ICON_MD_ZOOM_OUT, "Zoom out").c_str(), "Ctrl+-", false, s.has_document)) zoom_step_view(s, false);
@@ -387,6 +388,7 @@ void dock_layout(Session& s, ImGuiID dock, const ImGuiViewport* viewport) {
         ImGui::DockBuilderDockWindow("Pages", left);
         ImGui::DockBuilderDockWindow("Outline", left);
         ImGui::DockBuilderDockWindow("Properties", right);
+        ImGui::DockBuilderDockWindow("Search results", right);
         ImGui::DockBuilderFinish(dock);
         s.sidebar_focus_tab = s.sidebar_tab;
         s.sidebar_focus_frames = 3;
@@ -435,8 +437,8 @@ void rotate_view(Session& s, int quarter_turns) {
     s.view.rotate(quarter_turns);
     s.request_scroll(s.view.current_page);
 }
-void open_find(Session& s) { if (!s.has_document) return; s.show_find = true; s.focus_find = true; }
-void close_find(Session& s) { s.show_find = false; s.find_text.clear(); s.find_dirty = true; }
+void open_find(Session& s) { if (!s.has_document) return; s.show_find = true; s.focus_find = true; s.show_results = true; s.focus_results = true; }
+void close_find(Session& s) { s.show_find = false; s.show_results = false; s.find_text.clear(); s.find_dirty = true; }
 void find_step(Session& s, int direction) {
     if (!s.show_find) open_find(s);
     s.find_step_requested = true;
@@ -489,6 +491,8 @@ void draw_workspace(Session& s) {
     }
     if (s.sidebar_focus_frames > 0) { --s.sidebar_focus_frames; s.sidebar_tab = s.sidebar_focus_tab; }
     if (s.show_properties) draw_properties_panel(s);
+    if (s.show_results) draw_search_results_panel(s);
+    s.focus_results = false;
     draw_dialogs(s);
 }
 

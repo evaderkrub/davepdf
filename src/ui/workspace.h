@@ -23,6 +23,7 @@ void draw_canvas(Session& session);            // canvas.cpp
 void draw_pages_panel(Session& session);       // panels.cpp
 void draw_outline_panel(Session& session);
 void draw_properties_panel(Session& session);
+void draw_search_results_panel(Session& session);
 void draw_dialogs(Session& session);           // dialogs.cpp
 
 // Shared helpers (workspace.cpp).

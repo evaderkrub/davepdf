@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace davepdf::ui {
 namespace {
@@ -142,6 +143,90 @@ void draw_outline_panel(Session& s) {
     else {
         size_t index = 0;
         outline_level(s, index, 0, us);
+    }
+    ImGui::End();
+}
+
+void draw_search_results_panel(Session& s) {
+    const float us = ui_scale(s);
+    const auto& p = fwPaletteCurrent();
+    ImGui::SetNextWindowSizeConstraints(ImVec2(220 * us, 120 * us), ImVec2(FLT_MAX, FLT_MAX));
+    if (s.focus_results) ImGui::SetNextWindowFocus();
+    if (!ImGui::Begin("Search results", &s.show_results, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
+    if (!s.has_document || s.find_text.empty()) {
+        empty_state(ICON_MD_MANAGE_SEARCH, s.has_document ? "Type in the find bar (Ctrl+F) to list every match here." : "Open a document and search it to list matches here.");
+        ImGui::End();
+        return;
+    }
+    // Header: query and tally.
+    ImGui::PushFont(fonts().bold, 0);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.heading), "%s", s.find_text.c_str());
+    ImGui::PopFont();
+    int pages_with_hits = 0, last_page = -1;
+    for (const auto& hit : s.hits) if (hit.page != last_page) { ++pages_with_hits; last_page = hit.page; }
+    if (s.find_progress < s.view.page_count()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), "%zu so far, scanning page %d of %d", s.hits.size(), s.find_progress, s.view.page_count());
+    else if (s.hits.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.warning), "No matches");
+    else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textMuted), "%zu %s on %d %s", s.hits.size(), s.hits.size() == 1 ? "match" : "matches", pages_with_hits, pages_with_hits == 1 ? "page" : "pages");
+    ImGui::Separator();
+
+    static int last_current = -1;
+    const bool follow = last_current != s.current_hit;
+    last_current = s.current_hit;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float row_h = ImGui::GetTextLineHeight() * 2 + 10 * us;
+    // Hits are stored in scan order (from the page being read, wrapping);
+    // the list reads better in page order, so render through a sorted index.
+    std::vector<size_t> order(s.hits.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return s.hits[a].page != s.hits[b].page ? s.hits[a].page < s.hits[b].page : s.hits[a].start < s.hits[b].start;
+    });
+    last_page = -1;
+    for (size_t i : order) {
+        const SearchHit& hit = s.hits[i];
+        if (hit.page != last_page) {
+            // Page group header. Hits are in scan order, so a page's hits are contiguous.
+            last_page = hit.page;
+            ImGui::Dummy(ImVec2(0, 2 * us));
+            ImGui::PushFont(fonts().bold, 0);
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(p.textFaint), "PAGE %d", hit.page + 1);
+            ImGui::PopFont();
+        }
+        const bool current = static_cast<int>(i) == s.current_hit;
+        const std::string id = "###hit" + std::to_string(i);
+        const ImVec2 top = ImGui::GetCursorScreenPos();
+        const float width = ImGui::GetContentRegionAvail().x;
+        if (ImGui::Selectable(id.c_str(), current, ImGuiSelectableFlags_None, ImVec2(0, row_h))) s.find_select_hit = static_cast<int>(i);
+        if (current && follow && !ImGui::IsItemVisible()) ImGui::SetScrollHereY(0.5f);
+        if (!ImGui::IsItemVisible()) continue;
+        // Accent bar on the current hit, then the snippet with the match coloured.
+        if (current) dl->AddRectFilled(ImVec2(top.x, top.y + 3 * us), ImVec2(top.x + 3 * us, top.y + row_h - 3 * us), p.accent, 2 * us);
+        const float x0 = top.x + 10 * us, y0 = top.y + 5 * us;
+        const float max_x = top.x + width - 4 * us;
+        ImVec4 clip(top.x, top.y, max_x, top.y + row_h);
+        const char* ellipsis = "\xE2\x80\xA6";
+        // Lead-in is right-aligned to the match so the match always shows.
+        const float match_w = ImGui::CalcTextSize(hit.match.c_str()).x;
+        const float before_w = ImGui::CalcTextSize(hit.before.c_str()).x;
+        const float lead_room = std::max(0.0f, std::min(before_w, (max_x - x0) * 0.4f));
+        // Walk the lead-in from its end to fit lead_room.
+        const char* lead_begin = hit.before.c_str() + hit.before.size();
+        while (lead_begin > hit.before.c_str() && ImGui::CalcTextSize(lead_begin - 1).x <= lead_room) --lead_begin;
+        while (lead_begin < hit.before.c_str() + hit.before.size() && (static_cast<unsigned char>(*lead_begin) & 0xC0) == 0x80) ++lead_begin;  // UTF-8 boundary
+        float x = x0;
+        if (lead_begin > hit.before.c_str()) { dl->AddText(nullptr, 0, ImVec2(x, y0), p.textFaint, ellipsis, nullptr, 0, &clip); x += ImGui::CalcTextSize(ellipsis).x; }
+        dl->AddText(nullptr, 0, ImVec2(x, y0), p.textMuted, lead_begin, nullptr, 0, &clip);
+        x += ImGui::CalcTextSize(lead_begin).x;
+        ImGui::PushFont(fonts().bold, 0);
+        dl->AddText(nullptr, 0, ImVec2(x, y0), p.accent, hit.match.c_str(), nullptr, 0, &clip);
+        ImGui::PopFont();
+        x += match_w;
+        dl->AddText(nullptr, 0, ImVec2(x, y0), p.textMuted, hit.after.c_str(), nullptr, 0, &clip);
+        // Second line: position on the page.
+        char where[64];
+        const RectF r = hit.rects.empty() ? RectF{} : hit.rects.front();
+        std::snprintf(where, sizeof where, "%d%% down the page", static_cast<int>(r.y * 100));
+        dl->AddText(ImVec2(x0, y0 + ImGui::GetTextLineHeight() + 2 * us), p.textFaint, where);
     }
     ImGui::End();
 }
