@@ -8,7 +8,9 @@ A portable native PDF viewer for Windows x64, built in C++20 with SDL3 for the w
 
 Run `davepdf.exe` and keep `assets` and `pdfium.dll` beside it. No installer, Visual C++ redistributable, network connection or other runtime is needed: SDL, Dear ImGui and the C runtime are linked statically, and PDFium ships as the one DLL in the folder. Fonts, the PDFium library, settings and the dock layout are all resolved relative to the executable, so the folder keeps working when it is launched from a shortcut, another drive or a different working directory. If the folder is read-only, settings go to `%LOCALAPPDATA%\davepdf` instead.
 
-The build stages the application in `C:\buildfiles\davepdf\release\portable\davepdf`. Produce a clean copy for distribution with:
+Prebuilt zips are on the [Releases page](https://github.com/evaderkrub/davepdf/releases): download `davepdf-<version>-windows-x64.zip`, extract it anywhere, run `davepdf.exe`. A `.sha256` file accompanies each zip.
+
+The build stages the application in `C:\buildfiles\davepdf\release\portable\davepdf`. `tools\package.ps1` produces the release zip from a clean `cmake --install` (add `-Smoke` to extract it to a temp folder and run it once); for a plain folder copy use:
 
 ```powershell
 cmake --install C:\buildfiles\davepdf\release --prefix C:\buildfiles\davepdf\dist\davepdf
