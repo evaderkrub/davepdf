@@ -3,7 +3,10 @@
 #include "platform/pdf_engine.h"
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <tuple>
+#include <vector>
 
 using namespace davepdf;
 using namespace davepdf::platform;

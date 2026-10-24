@@ -3,9 +3,12 @@
 #include <fpdf_doc.h>
 #include <fpdf_text.h>
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
+#include <string>
 
 namespace davepdf::platform {
 namespace {
@@ -77,7 +80,7 @@ std::string pretty_date(const std::string& raw) {
     std::string s = raw;
     if (s.rfind("D:", 0) == 0) s.erase(0, 2);
     if (s.size() < 8) return raw;
-    for (size_t i = 0; i < 8; ++i) if (!isdigit(static_cast<unsigned char>(s[i]))) return raw;
+    for (size_t i = 0; i < 8; ++i) if (!std::isdigit(static_cast<unsigned char>(s[i]))) return raw;
     std::string out = s.substr(0, 4) + "-" + s.substr(4, 2) + "-" + s.substr(6, 2);
     if (s.size() >= 12) out += " " + s.substr(8, 2) + ":" + s.substr(10, 2);
     return out;

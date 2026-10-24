@@ -293,7 +293,10 @@ bool App::init(int argc, char** argv) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    // Keyboard navigation stays off: arrows, Space and Home/End scroll the page.
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    // Enter in the find field steps to the next hit and must not drop focus.
+    io.ConfigInputTextEnterKeepActive = true;
     io.IniFilename = nullptr;
     ini_path = utf8(settings_dir / "layout.ini");
     if (!testing) ImGui::LoadIniSettingsFromDisk(ini_path.c_str());

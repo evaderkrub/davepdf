@@ -4,8 +4,10 @@
 #include <commdlg.h>
 #include <shellapi.h>
 #include <shlobj.h>
+#include <cstring>
 #include <fstream>
 #include <iterator>
+#include <utility>
 
 namespace davepdf::platform {
 

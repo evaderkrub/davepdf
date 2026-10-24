@@ -80,7 +80,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         capture_frame(ctx, "welcome");
         open_sample(ctx, s);
         IM_CHECK_EQ(s.view.current_page, 0);
-        IM_CHECK_EQ(s.info.title, std::string(kSampleTitle));
+        IM_CHECK(s.info.title == kSampleTitle);
         ctx->Yield(6);  // let the first pages render
         capture_frame(ctx, "document");
         ctx->SetRef("Document");
@@ -94,7 +94,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         ctx->ItemClick("**/First page");
         ctx->Yield(3);
         IM_CHECK_EQ(s.view.current_page, 0);
-        IM_CHECK(s.scroll_y < 1.0f);
+        IM_CHECK(s.scroll_y < 0.5f);
         ctx->ItemInputValue("**/###PageInput", 3);
         ctx->Yield(3);
         IM_CHECK_EQ(s.view.current_page, 2);
@@ -182,33 +182,39 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         ctx->Yield(3);
         IM_CHECK(s.show_find);
         ctx->SetRef("Document");
+        // Typing selects the first hit as it is found. ItemInputValue finishes
+        // with Shift+Enter, which is "previous match" and wraps to the last hit.
         ctx->ItemInputValue("**/###FindText", "davepdf sample");
         wait_for_search(ctx, s);
-        IM_CHECK_EQ(s.hits.size(), static_cast<size_t>(3));
-        IM_CHECK_EQ(s.current_hit, 0);
+        IM_CHECK(s.hits.size() == 3);
         IM_CHECK_EQ(s.hits[0].page, 0);
+        IM_CHECK_EQ(s.current_hit, 2);
+        IM_CHECK_EQ(s.view.current_page, 2);
         ctx->Yield(4);
         capture_frame(ctx, "find");
+        ctx->ItemClick("**/Next match");  // wraps forward
+        ctx->Yield(4);
+        IM_CHECK_EQ(s.current_hit, 0);
+        IM_CHECK_EQ(s.view.current_page, 0);
         ctx->ItemClick("**/Next match");
         ctx->Yield(4);
         IM_CHECK_EQ(s.current_hit, 1);
         IM_CHECK_EQ(s.view.current_page, 1);
-        ctx->ItemClick("**/Next match");
-        ctx->Yield(4);
-        IM_CHECK_EQ(s.current_hit, 2);
-        IM_CHECK_EQ(s.view.current_page, 2);
-        ctx->ItemClick("**/Next match");  // wraps
+        ctx->ItemClick("**/Previous match");
         ctx->Yield(4);
         IM_CHECK_EQ(s.current_hit, 0);
         IM_CHECK_EQ(s.view.current_page, 0);
-        ctx->ItemClick("**/Previous match");
-        ctx->Yield(4);
-        IM_CHECK_EQ(s.current_hit, 2);
-        // A search started on page 3 lists page 3's hit first.
+        // A search started while reading page 3 lists page 3's hit first.
+        ctx->ItemClick("**/Last page");
+        ctx->Yield(3);
+        IM_CHECK_EQ(s.view.current_page, 2);
         ctx->ItemInputValue("**/###FindText", "sample page");
         wait_for_search(ctx, s);
-        IM_CHECK_EQ(s.hits.size(), static_cast<size_t>(3));
+        IM_CHECK(s.hits.size() == 3);
         IM_CHECK_EQ(s.hits[0].page, 2);
+        IM_CHECK_EQ(s.hits[1].page, 0);
+        IM_CHECK_EQ(s.hits[2].page, 1);
+        IM_CHECK_EQ(s.current_hit, 2);  // Shift+Enter from the first hit wraps to the last
         // Match case excludes the lower-case body text.
         ctx->ItemClick("**/Match case");
         ctx->ItemInputValue("**/###FindText", "DAVEPDF");
@@ -216,7 +222,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         IM_CHECK(s.hits.empty());
         ctx->ItemClick("**/Match case");
         wait_for_search(ctx, s);
-        IM_CHECK_EQ(s.hits.size(), static_cast<size_t>(3));
+        IM_CHECK(s.hits.size() == 4);  // the title on every page plus "by davepdf itself" on page 1
         ctx->ItemClick("**/Close find");
         ctx->Yield(3);
         IM_CHECK(!s.show_find);
@@ -229,16 +235,21 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         auto& s = *static_cast<Session*>(ctx->Test->UserData);
         reset_session(s);
         open_sample(ctx, s);
-        IM_CHECK_EQ(s.outline.size(), static_cast<size_t>(3));
+        IM_CHECK(s.outline.size() == 3);
+        ctx->WindowFocus("//Outline");
+        ctx->Yield(2);
         ctx->SetRef("Outline");
         ctx->ItemClick("**/The last page");
         ctx->Yield(3);
         IM_CHECK_EQ(s.view.current_page, 2);
+        // The Outline click selected that tab; bring the thumbnails back.
+        ctx->WindowFocus("//Pages");
+        ctx->Yield(2);
         ctx->SetRef("Pages");
-        ctx->ItemClick("thumb1");
+        ctx->ItemClick("###thumb1");
         ctx->Yield(3);
         IM_CHECK_EQ(s.view.current_page, 1);
-        ctx->ItemClick("thumb0");
+        ctx->ItemClick("###thumb0");
         ctx->Yield(3);
         IM_CHECK_EQ(s.view.current_page, 0);
         // Click the "jump to the last page" link on page 1 through the real canvas geometry.
@@ -246,7 +257,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         IM_CHECK(canvas.Window != nullptr);
         const Layout layout = layout_pages(s.view, s.dpi);
         const auto& links = platform::page_links(s, 0);
-        IM_CHECK_EQ(links.size(), static_cast<size_t>(2));
+        IM_CHECK(links.size() == 2);
         const LinkBox* jump = nullptr;
         for (const auto& link : links) if (link.page == 2) jump = &link;
         IM_CHECK(jump != nullptr);
@@ -338,7 +349,7 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         platform::request_action(s, Action::OpenPath, u8(good));
         ctx->Yield(4);
         IM_CHECK(s.has_document);
-        IM_CHECK_EQ(s.info.file_name, std::string("sample copy.pdf"));
+        IM_CHECK_STR_EQ(s.info.file_name.c_str(), "sample copy.pdf");
         IM_CHECK(!s.recent.empty() && s.recent.front() == u8(good));
         platform::request_action(s, Action::OpenPath, u8(bad));
         ctx->Yield(4);
@@ -354,8 +365,10 @@ void register_davepdf_tests(ImGuiTestEngine* engine, Session& session) {
         platform::request_action(s, Action::OpenPath, u8(dir / "missing.pdf"));
         ctx->Yield(3);
         IM_CHECK(!s.error.empty());
-        s.error.clear();
+        ctx->SetRef("davepdf");
+        ctx->ItemClick("OK");
         ctx->Yield(2);
+        IM_CHECK(s.error.empty());
         // Recent list: the menu opens the file again after closing.
         platform::close_document(s);
         ctx->Yield(2);

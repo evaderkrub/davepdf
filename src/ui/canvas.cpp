@@ -101,6 +101,8 @@ void draw_canvas(Session& s) {
     if (s.scroll.pending && s.view.valid_page(s.scroll.page)) {
         const RectF& r = layout.pages[static_cast<size_t>(s.scroll.page)].rect;
         scroll_y = r.y + s.scroll.fraction * r.h - (s.scroll.center ? view_size.y / 2 : s.view.gap);
+        // The first page starts at the very top rather than a gap below it.
+        if (s.scroll.page == 0 && !s.scroll.center && s.scroll.fraction <= 0) scroll_y = 0;
         s.scroll.pending = false;
     }
 

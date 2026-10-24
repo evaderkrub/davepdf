@@ -1,22 +1,31 @@
 #include "app/sample_pdf.h"
+#include <cstdarg>
 #include <cstdio>
 #include <vector>
 
 namespace davepdf {
 namespace {
 
+void appendf(std::string& out, const char* format, ...) {
+    char buffer[4096];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(buffer, sizeof buffer, format, args);
+    va_end(args);
+    out += buffer;
+}
+
 std::string page_content(int page, bool landscape) {
     // Page 1 is a cover with a coloured header band, body copy and two link
     // targets; later pages vary the layout so scrolling has something to show.
     const float width = landscape ? 842.0f : 612.0f, height = landscape ? 595.0f : 792.0f;
-    char buffer[4096];
     std::string s;
     const auto add = [&](const char* text) { s += text; };
-    const auto addf = [&](auto... args) { std::snprintf(buffer, sizeof buffer, args...); s += buffer; };
+    const auto addf = [&](const char* format, auto... args) { appendf(s, format, args...); };
 
     // Header band.
     addf("0.784 0.188 0.188 rg 0 %.0f %.0f 72 re f\n", static_cast<double>(height - 72), static_cast<double>(width));
-    add("BT 1 1 1 rg /F2 22 Tf 36 " );
+    add("BT 1 1 1 rg /F2 22 Tf 36 ");
     addf("%.0f Td (%s) Tj ET\n", static_cast<double>(height - 46), kSampleTitle);
     addf("BT 0.2 0.2 0.22 rg /F1 12 Tf 36 %.0f Td (sample page %d of %d) Tj ET\n", static_cast<double>(height - 100), page, kSamplePageCount);
 

@@ -61,8 +61,10 @@ void outline_level(Session& s, size_t& index, int depth, float us) {
         if (current) flags |= ImGuiTreeNodeFlags_Selected;
         ImGui::PushID(static_cast<int>(here));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4 * us, 3 * us));
+        // The title is the ID (inside a per-item PushID) so tests and the
+        // navigation system can address bookmarks by name.
         const std::string label = item.title.empty() ? std::string("(untitled)") : item.title;
-        const bool opened = ImGui::TreeNodeEx("##node", flags, "%s", label.c_str());
+        const bool opened = ImGui::TreeNodeEx(label.c_str(), flags);
         ImGui::PopStyleVar();
         if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen() && item.page >= 0) platform::go_to_page(s, item.page);
         if (ImGui::IsItemHovered() && item.page >= 0) ImGui::SetTooltip("Page %d", item.page + 1);
@@ -86,8 +88,11 @@ void draw_pages_panel(Session& s) {
     const float us = ui_scale(s);
     const auto& p = fwPaletteCurrent();
     ImGui::SetNextWindowSizeConstraints(ImVec2(140 * us, 100 * us), ImVec2(FLT_MAX, FLT_MAX));
+    if (s.sidebar_focus_frames > 0 && s.sidebar_focus_tab == 0) ImGui::SetNextWindowFocus();
     if (!ImGui::Begin("Pages", nullptr, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::IsWindowHovered()) s.sidebar_tab = 0;
+    // Begin returns true only for the visible tab of a dock node, which is
+    // exactly the "which sidebar tab is open" fact worth remembering.
+    s.sidebar_tab = 0;
     if (!s.has_document) { empty_state(ICON_MD_PHOTO_LIBRARY, "Page thumbnails appear here once a document is open."); ImGui::End(); return; }
 
     const float pad = 10 * us;
@@ -129,8 +134,9 @@ void draw_pages_panel(Session& s) {
 void draw_outline_panel(Session& s) {
     const float us = ui_scale(s);
     ImGui::SetNextWindowSizeConstraints(ImVec2(140 * us, 100 * us), ImVec2(FLT_MAX, FLT_MAX));
+    if (s.sidebar_focus_frames > 0 && s.sidebar_focus_tab == 1) ImGui::SetNextWindowFocus();
     if (!ImGui::Begin("Outline", nullptr, ImGuiWindowFlags_NoCollapse)) { ImGui::End(); return; }
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::IsWindowHovered()) s.sidebar_tab = 1;
+    s.sidebar_tab = 1;
     if (!s.has_document) empty_state(ICON_MD_TOC, "The document outline (bookmarks) appears here.");
     else if (s.outline.empty()) empty_state(ICON_MD_TOC, "This document has no outline.");
     else {

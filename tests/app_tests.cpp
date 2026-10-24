@@ -47,7 +47,7 @@ static void test_layout() {
     CHECK(near(l.width, 1123 + 40));
     CHECK(near(l.pages[0].rect.y, 20));
     CHECK(near(l.pages[1].rect.y, 20 + 1056 + 10));
-    CHECK(near(l.pages[0].rect.x, (l.width - 816) / 2));
+    CHECK(near(l.pages[0].rect.x, (l.width - 816) / 2, 0.5f));  // centred, snapped to a whole pixel
     CHECK(near(l.height, l.pages[2].rect.y + l.pages[2].rect.h + 20));
     // Rotation swaps page dimensions.
     v.rotate(1);

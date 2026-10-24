@@ -70,7 +70,11 @@ struct Session {
 
     // Interface state.
     bool show_sidebar = true;
-    int sidebar_tab = 0;
+    int sidebar_tab = 0;          // 0 pages, 1 outline: the visible tab of the sidebar
+    // After the dock layout is (re)built the remembered tab is focused for a
+    // few frames, because newly docked windows settle over more than one.
+    int sidebar_focus_tab = -1;
+    int sidebar_focus_frames = 0;
     bool show_properties = false;
     bool show_about = false;
     bool show_goto = false;

@@ -23,6 +23,12 @@ std::string directory_of(const std::string& path) {
     return slash == std::string::npos ? std::string() : path.substr(0, slash);
 }
 
+// Icon-prefixed menu labels keep a plain-text ID (after ###) so shortcuts,
+// tests and the ini file address them by their visible name.
+std::string menu_label(const char* icon, const char* text) {
+    return std::string(icon) + "  " + text + "###" + text;
+}
+
 std::string zoom_label(const Session& s) {
     char buffer[32];
     std::snprintf(buffer, sizeof buffer, "%d%%", static_cast<int>(std::lround(s.view.zoom * 100)));
@@ -38,7 +44,7 @@ void menu(Session& s) {
     ImGui::PopFont();
     ImGui::Dummy(ImVec2(6 * ui_scale(s), 0));
     if (ImGui::BeginMenu("File")) {
-        if (ImGui::MenuItem(ICON_MD_FOLDER_OPEN "  Open...", "Ctrl+O")) platform::request_action(s, Action::Open);
+        if (ImGui::MenuItem(menu_label(ICON_MD_FOLDER_OPEN, "Open...").c_str(), "Ctrl+O")) platform::request_action(s, Action::Open);
         if (ImGui::BeginMenu("Open recent", !s.recent.empty())) {
             for (size_t i = 0; i < s.recent.size(); ++i) {
                 const std::string label = file_name_of(s.recent[i]) + "###recent" + std::to_string(i);
@@ -49,7 +55,7 @@ void menu(Session& s) {
             if (ImGui::MenuItem("Clear list")) s.recent.clear();
             ImGui::EndMenu();
         }
-        if (ImGui::MenuItem(ICON_MD_AUTO_STORIES "  Open sample document")) platform::request_action(s, Action::OpenSample);
+        if (ImGui::MenuItem(menu_label(ICON_MD_AUTO_STORIES, "Open sample document").c_str())) platform::request_action(s, Action::OpenSample);
         ImGui::Separator();
         if (ImGui::MenuItem("Close", "Ctrl+W", false, s.has_document)) platform::request_action(s, Action::Close);
         ImGui::Separator();
@@ -57,19 +63,19 @@ void menu(Session& s) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Edit")) {
-        if (ImGui::MenuItem(ICON_MD_CONTENT_COPY "  Copy page text", "Ctrl+C", false, s.has_document)) platform::copy_page_text(s, s.view.current_page);
+        if (ImGui::MenuItem(menu_label(ICON_MD_CONTENT_COPY, "Copy page text").c_str(), "Ctrl+C", false, s.has_document)) platform::copy_page_text(s, s.view.current_page);
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_MD_SEARCH "  Find...", "Ctrl+F", false, s.has_document)) open_find(s);
+        if (ImGui::MenuItem(menu_label(ICON_MD_SEARCH, "Find...").c_str(), "Ctrl+F", false, s.has_document)) open_find(s);
         if (ImGui::MenuItem("Find next", "F3", false, !s.hits.empty())) find_step(s, 1);
         if (ImGui::MenuItem("Find previous", "Shift+F3", false, !s.hits.empty())) find_step(s, -1);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
-        ImGui::MenuItem(ICON_MD_VIEW_SIDEBAR "  Sidebar", "Ctrl+B", &s.show_sidebar);
-        ImGui::MenuItem(ICON_MD_INFO_OUTLINE "  Properties", "Ctrl+I", &s.show_properties);
+        ImGui::MenuItem(menu_label(ICON_MD_VERTICAL_SPLIT, "Sidebar").c_str(), "Ctrl+B", &s.show_sidebar);
+        ImGui::MenuItem(menu_label(ICON_MD_INFO_OUTLINE, "Properties").c_str(), "Ctrl+I", &s.show_properties);
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_MD_ZOOM_IN "  Zoom in", "Ctrl++", false, s.has_document)) zoom_step_view(s, true);
-        if (ImGui::MenuItem(ICON_MD_ZOOM_OUT "  Zoom out", "Ctrl+-", false, s.has_document)) zoom_step_view(s, false);
+        if (ImGui::MenuItem(menu_label(ICON_MD_ZOOM_IN, "Zoom in").c_str(), "Ctrl++", false, s.has_document)) zoom_step_view(s, true);
+        if (ImGui::MenuItem(menu_label(ICON_MD_ZOOM_OUT, "Zoom out").c_str(), "Ctrl+-", false, s.has_document)) zoom_step_view(s, false);
         if (ImGui::BeginMenu("Zoom", s.has_document)) {
             for (int percent : {50, 75, 100, 125, 150, 200, 300, 400}) {
                 const std::string label = std::to_string(percent) + "%";
@@ -78,11 +84,11 @@ void menu(Session& s) {
             }
             ImGui::EndMenu();
         }
-        if (ImGui::MenuItem(ICON_MD_WIDTH_FULL "  Fit width", "Ctrl+2", s.view.fit == FitMode::Width, s.has_document)) set_fit(s, FitMode::Width);
-        if (ImGui::MenuItem(ICON_MD_FIT_SCREEN "  Fit page", "Ctrl+0", s.view.fit == FitMode::Page, s.has_document)) set_fit(s, FitMode::Page);
+        if (ImGui::MenuItem(menu_label(ICON_MD_SWAP_HORIZ, "Fit width").c_str(), "Ctrl+2", s.view.fit == FitMode::Width, s.has_document)) set_fit(s, FitMode::Width);
+        if (ImGui::MenuItem(menu_label(ICON_MD_FIT_SCREEN, "Fit page").c_str(), "Ctrl+0", s.view.fit == FitMode::Page, s.has_document)) set_fit(s, FitMode::Page);
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_MD_ROTATE_RIGHT "  Rotate clockwise", "Ctrl+R", false, s.has_document)) rotate_view(s, 1);
-        if (ImGui::MenuItem(ICON_MD_ROTATE_LEFT "  Rotate counter-clockwise", "Ctrl+Shift+R", false, s.has_document)) rotate_view(s, -1);
+        if (ImGui::MenuItem(menu_label(ICON_MD_ROTATE_RIGHT, "Rotate clockwise").c_str(), "Ctrl+R", false, s.has_document)) rotate_view(s, 1);
+        if (ImGui::MenuItem(menu_label(ICON_MD_ROTATE_LEFT, "Rotate counter-clockwise").c_str(), "Ctrl+Shift+R", false, s.has_document)) rotate_view(s, -1);
         ImGui::Separator();
         if (ImGui::BeginMenu("Theme")) {
             for (int i = 0; i < fwThemeCount(); ++i) if (ImGui::MenuItem(fwThemeAt(i).szName, nullptr, s.theme == i)) { s.theme = i; fwRequestTheme(i); }
@@ -99,16 +105,16 @@ void menu(Session& s) {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Go")) {
-        if (ImGui::MenuItem(ICON_MD_FIRST_PAGE "  First page", "Home", false, s.has_document)) platform::go_to_page(s, 0);
-        if (ImGui::MenuItem(ICON_MD_NAVIGATE_BEFORE "  Previous page", "Page Up", false, s.has_document)) platform::go_to_page(s, s.view.current_page - 1);
-        if (ImGui::MenuItem(ICON_MD_NAVIGATE_NEXT "  Next page", "Page Down", false, s.has_document)) platform::go_to_page(s, s.view.current_page + 1);
-        if (ImGui::MenuItem(ICON_MD_LAST_PAGE "  Last page", "End", false, s.has_document)) platform::go_to_page(s, s.view.page_count() - 1);
+        if (ImGui::MenuItem(menu_label(ICON_MD_FIRST_PAGE, "First page").c_str(), "Home", false, s.has_document)) platform::go_to_page(s, 0);
+        if (ImGui::MenuItem(menu_label(ICON_MD_NAVIGATE_BEFORE, "Previous page").c_str(), "Page Up", false, s.has_document)) platform::go_to_page(s, s.view.current_page - 1);
+        if (ImGui::MenuItem(menu_label(ICON_MD_NAVIGATE_NEXT, "Next page").c_str(), "Page Down", false, s.has_document)) platform::go_to_page(s, s.view.current_page + 1);
+        if (ImGui::MenuItem(menu_label(ICON_MD_LAST_PAGE, "Last page").c_str(), "End", false, s.has_document)) platform::go_to_page(s, s.view.page_count() - 1);
         ImGui::Separator();
         if (ImGui::MenuItem("Go to page...", "Ctrl+G", false, s.has_document)) { s.goto_input = s.view.current_page + 1; s.show_goto = true; }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
-        if (ImGui::MenuItem(ICON_MD_KEYBOARD "  Keyboard shortcuts", "F1")) s.show_shortcuts = true;
+        if (ImGui::MenuItem(menu_label(ICON_MD_KEYBOARD, "Keyboard shortcuts").c_str(), "F1")) s.show_shortcuts = true;
         if (ImGui::MenuItem("About davepdf")) s.show_about = true;
         ImGui::EndMenu();
     }
@@ -122,7 +128,7 @@ void toolbar(Session& s) {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4 * us, 4 * us));
     if (icon_button(ICON_MD_FOLDER_OPEN, "Open")) platform::request_action(s, Action::Open);
     ImGui::SameLine();
-    if (icon_button(ICON_MD_VIEW_SIDEBAR, "Toggle sidebar", true, s.show_sidebar)) s.show_sidebar = !s.show_sidebar;
+    if (icon_button(ICON_MD_VERTICAL_SPLIT, "Toggle sidebar", true, s.show_sidebar)) s.show_sidebar = !s.show_sidebar;
     toolbar_divider();
     if (icon_button(ICON_MD_FIRST_PAGE, "First page", doc && s.view.current_page > 0)) platform::go_to_page(s, 0);
     ImGui::SameLine();
@@ -168,9 +174,9 @@ void toolbar(Session& s) {
     ImGui::SameLine();
     if (icon_button(ICON_MD_ZOOM_IN, "Zoom in", doc && s.view.zoom < kMaxZoom)) zoom_step_view(s, true);
     ImGui::SameLine();
-    if (icon_button(ICON_MD_WIDTH_FULL, "Fit width", doc, s.view.fit == FitMode::Width)) set_fit(s, FitMode::Width);
+    if (icon_button(ICON_MD_SWAP_HORIZ, "Fit width", doc, doc && s.view.fit == FitMode::Width)) set_fit(s, FitMode::Width);
     ImGui::SameLine();
-    if (icon_button(ICON_MD_FIT_SCREEN, "Fit page", doc, s.view.fit == FitMode::Page)) set_fit(s, FitMode::Page);
+    if (icon_button(ICON_MD_FIT_SCREEN, "Fit page", doc, doc && s.view.fit == FitMode::Page)) set_fit(s, FitMode::Page);
     toolbar_divider();
     if (icon_button(ICON_MD_ROTATE_LEFT, "Rotate left", doc)) rotate_view(s, -1);
     ImGui::SameLine();
@@ -202,13 +208,15 @@ void find_bar(Session& s) {
         if (s.focus_find) { ImGui::SetKeyboardFocusHere(); s.focus_find = false; }
         ImGui::SetNextItemWidth(std::max(160 * us, ImGui::GetContentRegionAvail().x - 300 * us));
         const bool entered = ImGui::InputTextWithHint("###FindText", "Find in document", &s.find_text, ImGuiInputTextFlags_EnterReturnsTrue);
+        const ImGuiID field = ImGui::GetItemID();
         if (ImGui::IsItemEdited()) s.find_dirty = true;
-        if (entered) {
-            // Enter steps to the next hit; Shift+Enter to the previous. The
-            // field keeps focus so repeated Enter keeps walking the results.
-            find_step(s, ImGui::GetIO().KeyShift ? -1 : 1);
-            ImGui::SetKeyboardFocusHere(-1);
-        }
+        // Enter steps to the next hit, Shift+Enter to the previous. The field
+        // owns the Enter key and validates with key repeat, so a slow frame
+        // (pages rendering) could turn one press into two; asking as the owner
+        // without repeat counts each press once. ConfigInputTextEnterKeepActive
+        // keeps the field active so Enter can be pressed again.
+        const bool pressed_once = ImGui::IsKeyPressed(ImGuiKey_Enter, ImGuiInputFlags_None, field) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, ImGuiInputFlags_None, field);
+        if (entered && pressed_once) find_step(s, ImGui::GetIO().KeyShift ? -1 : 1);
         ImGui::SameLine();
         ImGui::AlignTextToFramePadding();
         if (s.find_text.empty()) ImGui::TextDisabled("Type to search");
@@ -265,7 +273,7 @@ void welcome(Session& s) {
     const auto& p = fwPaletteCurrent();
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const float card_w = std::min(avail.x - 40 * us, 520 * us);
-    const float card_h = std::min(avail.y - 40 * us, (s.recent.empty() ? 330.0f : 330.0f + std::min<float>(static_cast<float>(s.recent.size()), 5.0f) * 34.0f + 36.0f) * us);
+    const float card_h = std::min(avail.y - 40 * us, (s.recent.empty() ? 292.0f : 292.0f + std::min<float>(static_cast<float>(s.recent.size()), 5.0f) * 34.0f + 40.0f) * us);
     ImGui::SetCursorPos(ImVec2(ImGui::GetCursorPosX() + std::max(0.0f, (avail.x - card_w) / 2), ImGui::GetCursorPosY() + std::max(0.0f, (avail.y - card_h) / 2)));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, p.surface);
     ImGui::PushStyleColor(ImGuiCol_Border, p.border);
@@ -370,8 +378,8 @@ void dock_layout(Session& s, ImGuiID dock, const ImGuiViewport* viewport) {
         ImGui::DockBuilderDockWindow("Outline", left);
         ImGui::DockBuilderDockWindow("Properties", right);
         ImGui::DockBuilderFinish(dock);
-        // Pages is listed first so it is the selected tab of the left node.
-        if (ImGuiDockNode* node = ImGui::DockBuilderGetNode(left)) node->SelectedTabId = ImHashStr(s.sidebar_tab == 1 ? "Outline" : "Pages");
+        s.sidebar_focus_tab = s.sidebar_tab;
+        s.sidebar_focus_frames = 3;
     }
     s.dock_initialized = true;
 }
@@ -469,6 +477,7 @@ void draw_workspace(Session& s) {
         draw_pages_panel(s);
         draw_outline_panel(s);
     }
+    if (s.sidebar_focus_frames > 0) { --s.sidebar_focus_frames; s.sidebar_tab = s.sidebar_focus_tab; }
     if (s.show_properties) draw_properties_panel(s);
     draw_dialogs(s);
 }
